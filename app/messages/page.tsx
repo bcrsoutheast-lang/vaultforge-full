@@ -9,28 +9,21 @@ interface Message {
   id: string
   type: 'deal' | 'pain'
   status: 'saved' | 'archived' | 'deleted'
-  from: string
+  sender: string
   timestamp: string
-  sellerName: string
-  sellerPhone: string
-  sellerEmail: string
-  ps: number
-  vs?: number
-  address: string
-  ask: number
-  arv: number
-  spread: number
+  seller: { name: string; ps: number; address: string }
+  deal: { ask: number; arv: number; spread: number }
+  message: string
   unread: boolean
   flagged: boolean
-  photo: string
 }
 
-function MessageCenterContent() {
+function MessagesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [time, setTime] = useState('')
-  const [filter, setFilter] = useState(searchParams.get('filter') || 'all')
-  
+  const [filter, setFilter] = useState(searchParams.get('filter') || 'dealSaved')
+
   useEffect(() => {
     setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
     const interval = setInterval(() => {
@@ -40,202 +33,163 @@ function MessageCenterContent() {
   }, [])
 
   const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'deal',
-      status: 'saved',
-      from: 'VaultForge OS',
-      timestamp: '14 MIN AGO',
-      sellerName: 'John Smith',
-      sellerPhone: '404-555-0192',
-      sellerEmail: 'jsmith@gmail.com',
-      ps: 94,
-      vs: 820,
-      address: '123 Main St Atlanta, GA',
-      ask: 180000,
-      arv: 285000,
-      spread: 22000,
-      unread: true,
-      flagged: false,
-      photo: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400'
-    },
-    {
-      id: '2',
-      type: 'pain',
-      status: 'saved',
-      from: 'VaultForge AI',
-      timestamp: '1 HR AGO',
-      sellerName: 'Lisa Johnson',
-      sellerPhone: '404-555-0143',
-      sellerEmail: 'lisa@gmail.com',
-      ps: 88,
-      vs: 701,
-      address: '456 Oak Ave Atlanta, GA',
-      ask: 210000,
-      arv: 295000,
-      spread: 18000,
-      unread: true,
-      flagged: false,
-      photo: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400'
-    }
+    { id: '1', type: 'deal', status: 'saved', sender: 'VaultForge AI', timestamp: '2m ago', seller: { name: 'James Wilson', ps: 94, address: '1428 Maple Ave' }, deal: { ask: 142000, arv: 245000, spread: 42 }, message: 'ALPHA buyer Marcus King wants to walk this property ASAP. Cash ready.', unread: true, flagged: true },
+    { id: '2', type: 'deal', status: 'saved', sender: 'VaultForge AI', timestamp: '8m ago', seller: { name: 'Maria Gonzalez', ps: 89, address: '8812 Oak St' }, deal: { ask: 98000, arv: 165000, spread: 40 }, message: 'Sarah Chen submitted proof of funds. Ready to assign.', unread: true, flagged: false },
+    { id: '3', type: 'pain', status: 'saved', sender: 'VaultForge AI', timestamp: '15m ago', seller: { name: 'Robert Chen', ps: 76, address: '3341 Pine Dr' }, deal: { ask: 75000, arv: 128000, spread: 41 }, message: 'Seller motivation increased. Divorce finalized. PS now 76.', unread: true, flagged: false },
+    { id: '4', type: 'deal', status: 'archived', sender: 'VaultForge AI', timestamp: '1h ago', seller: { name: 'Lisa Johnson', ps: 68, address: '9901 Elm Rd' }, deal: { ask: 120000, arv: 185000, spread: 35 }, message: 'Deal closed. Assignment fee $9,500 collected.', unread: false, flagged: false },
   ])
 
+  const filterMap = {
+    dealSaved: { type: 'deal', status: 'saved' },
+    dealArchived: { type: 'deal', status: 'archived' },
+    dealDeleted: { type: 'deal', status: 'deleted' },
+    painSaved: { type: 'pain', status: 'saved' },
+    painArchived: { type: 'pain', status: 'archived' },
+    painDeleted: { type: 'pain', status: 'deleted' },
+  }
+
+  const currentFilter = filterMap[filter as keyof typeof filterMap] || filterMap.dealSaved
+  const filteredMessages = messages.filter(m => m.type === currentFilter.type && m.status === currentFilter.status)
+
   const counts = {
-    dealSaved: messages.filter(function(m) { return m.type === 'deal' && m.status === 'saved' }).length,
-    dealArchived: messages.filter(function(m) { return m.type === 'deal' && m.status === 'archived' }).length,
-    dealDeleted: messages.filter(function(m) { return m.type === 'deal' && m.status === 'deleted' }).length,
-    painSaved: messages.filter(function(m) { return m.type === 'pain' && m.status === 'saved' }).length,
-    painArchived: messages.filter(function(m) { return m.type === 'pain' && m.status === 'archived' }).length,
-    painDeleted: messages.filter(function(m) { return m.type === 'pain' && m.status === 'deleted' }).length
+    dealSaved: messages.filter(m => m.type === 'deal' && m.status === 'saved').length,
+    dealArchived: messages.filter(m => m.type === 'deal' && m.status === 'archived').length,
+    dealDeleted: messages.filter(m => m.type === 'deal' && m.status === 'deleted').length,
+    painSaved: messages.filter(m => m.type === 'pain' && m.status === 'saved').length,
+    painArchived: messages.filter(m => m.type === 'pain' && m.status === 'archived').length,
+    painDeleted: messages.filter(m => m.type === 'pain' && m.status === 'deleted').length,
   }
 
-  const unread = {
-    dealSaved: messages.filter(function(m) { return m.type === 'deal' && m.status === 'saved' && m.unread }).length,
-    dealArchived: messages.filter(function(m) { return m.type === 'deal' && m.status === 'archived' && m.unread }).length,
-    dealDeleted: messages.filter(function(m) { return m.type === 'deal' && m.status === 'deleted' && m.unread }).length,
-    painSaved: messages.filter(function(m) { return m.type === 'pain' && m.status === 'saved' && m.unread }).length,
-    painArchived: messages.filter(function(m) { return m.type === 'pain' && m.status === 'archived' && m.unread }).length,
-    painDeleted: messages.filter(function(m) { return m.type === 'pain' && m.status === 'deleted' && m.unread }).length
+  const updateStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
+    setMessages(messages.map(m => m.id === id ? {...m, status: newStatus} : m))
   }
 
-  const updateMessageStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
-    setMessages(function(prev) {
-      return prev.map(function(m) {
-        return m.id === id? {...m, status: newStatus, unread: false} : m
-      })
-    })
+  const formatCurrency = (num: number) => `$${(num / 1000).toFixed(0)}K`
+
+  const getBorderColor = (type: string) => {
+    return type === 'deal' ? 'border-[#D4AF37]' : 'border-[#FF3B30]'
   }
-
-  const toggleFlag = (id: string) => {
-    setMessages(function(prev) {
-      return prev.map(function(m) {
-        return m.id === id? {...m, flagged:!m.flagged} : m
-      })
-    })
-  }
-
-  const cards = [
-    { key: 'dealSaved', label: 'DEAL MSG SAVED', count: counts.dealSaved, unread: unread.dealSaved, color: '#D4AF37' },
-    { key: 'dealArchived', label: 'DEAL MSG ARCHIVED', count: counts.dealArchived, unread: unread.dealArchived, color: '#FFA500' },
-    { key: 'dealDeleted', label: 'DEAL MSG DELETED', count: counts.dealDeleted, unread: unread.dealDeleted, color: '#666' },
-    { key: 'painSaved', label: 'PAIN MSG SAVED', count: counts.painSaved, unread: unread.painSaved, color: '#FF3B30' },
-    { key: 'painArchived', label: 'PAIN MSG ARCHIVED', count: counts.painArchived, unread: unread.painArchived, color: '#FFA500' },
-    { key: 'painDeleted', label: 'PAIN MSG DELETED', count: counts.painDeleted, unread: unread.painDeleted, color: '#666' }
-  ]
-
-  const filteredMessages = filter === 'all' 
-   ? messages.filter(function(m) { return m.status!== 'deleted' })
-    : messages.filter(function(m) {
-        if (filter === 'dealSaved') return m.type === 'deal' && m.status === 'saved'
-        if (filter === 'dealArchived') return m.type === 'deal' && m.status === 'archived'
-        if (filter === 'dealDeleted') return m.type === 'deal' && m.status === 'deleted'
-        if (filter === 'painSaved') return m.type === 'pain' && m.status === 'saved'
-        if (filter === 'painArchived') return m.type === 'pain' && m.status === 'archived'
-        if (filter === 'painDeleted') return m.type === 'pain' && m.status === 'deleted'
-        return true
-      })
 
   return (
-    <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4">
-      <div className="border-b border-[#333] pb-4 mb-4">
-        <div className="flex justify-between items-center">
+    <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4 pb-20">
+      <div className="border-b border-[#333] pb-4 mb-6">
+        <div className="flex justify-between items-center mb-4">
           <div>
-            <div className="text-[#D4AF37] text-lg font-bold">MESSAGE CENTER</div>
-            <div className="text-[#666] text-xs">INBOX</div>
+            <div className="text-white text-xl font-bold">MESSAGE CENTER</div>
+            <div className="text-[#666] text-xs">VAULTFORGE AI</div>
           </div>
           <div className="text-[#666] text-xs text-right">
-            TOTAL: {messages.length} | UNREAD: {messages.filter(function(m) { return m.unread }).length} |<br/>
-            {time} CST
+            SESSION ACTIVE | {time} CST
           </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <button onClick={() => setFilter('dealSaved')} className={`py-2 text-xs font-bold border ${filter === 'dealSaved' ? 'border-[#D4AF37] bg-[#D4AF37] text-black' : 'border-[#333] text-[#666]'}`}>
+            DEAL SAVED [{counts.dealSaved}]
+          </button>
+          <button onClick={() => setFilter('dealArchived')} className={`py-2 text-xs font-bold border ${filter === 'dealArchived' ? 'border-[#FFA500] bg-[#FFA500] text-black' : 'border-[#333] text-[#666]'}`}>
+            ARCHIVED [{counts.dealArchived}]
+          </button>
+          <button onClick={() => setFilter('dealDeleted')} className={`py-2 text-xs font-bold border ${filter === 'dealDeleted' ? 'border-[#FF3B30] bg-[#FF3B30] text-white' : 'border-[#333] text-[#666]'}`}>
+            DELETED [{counts.dealDeleted}]
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => setFilter('painSaved')} className={`py-2 text-xs font-bold border ${filter === 'painSaved' ? 'border-[#FF3B30] bg-[#FF3B30] text-white' : 'border-[#333] text-[#666]'}`}>
+            PAIN SAVED [{counts.painSaved}]
+          </button>
+          <button onClick={() => setFilter('painArchived')} className={`py-2 text-xs font-bold border ${filter === 'painArchived' ? 'border-[#FFA500] bg-[#FFA500] text-black' : 'border-[#333] text-[#666]'}`}>
+            ARCHIVED [{counts.painArchived}]
+          </button>
+          <button onClick={() => setFilter('painDeleted')} className={`py-2 text-xs font-bold border ${filter === 'painDeleted' ? 'border-[#FF3B30] bg-[#FF3B30] text-white' : 'border-[#333] text-[#666]'}`}>
+            DELETED [{counts.painDeleted}]
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {cards.map(function(card) {
-          const hasNew = card.unread > 0
-          return (
-            <button
-              key={card.key}
-              onClick={function() { setFilter(card.key) }}
-              className={'border-2 p-3 text-left transition ' + (filter === card.key? 'border-[#D4AF37] bg-[#1a1a1a]' : 'border-[#333] bg-[#0D0D0D]') + (hasNew? ' ring-2 animate-pulse' : '')}
-              style={{ borderColor: hasNew? card.color : '#333' }}
-            >
-              <div className="text-xs font-bold mb-1" style={{ color: card.color }}>{card.label}</div>
-              <div className="text-white text-2xl font-bold">{card.count}</div>
-              <div className="text-[#666] text-xs mt-1">
-                {card.unread > 0? 'UNREAD: ' + card.unread : card.key.includes('Deleted')? 'TRASH: ' + card.count : 'FLAGGED: 0'}
-              </div>
-              <div className="text-xs mt-2" style={{ color: card.color }}>[VIEW ALL]</div>
-            </button>
-          )
-        })}
-      </div>
-
-      <button onClick={function() { router.push('/dashboard') }} className="mb-4 px-4 py-2 border border-[#333] text-[#999] text-xs hover:border-[#D4AF37]">
-        BACK TO DASHBOARD
-      </button>
-
       <div className="space-y-3">
-        {filteredMessages.map(function(msg) {
-          return (
-            <div key={msg.id} className={'border-2 bg-[#1a1a1a] p-3 transition relative ' + (msg.type === 'deal'? 'border-[#D4AF37]' : 'border-[#FF3B30]') + (msg.unread? ' animate-pulse' : '')}>
-              {msg.unread && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full animate-ping"
-                     style={{ backgroundColor: msg.type === 'deal'? '#D4AF37' : '#FF3B30' }} />
-              )}
-              {msg.flagged && <div className="absolute -top-1 -left-1 text-[#FF3B30] text-lg">🚩</div>}
-              
-              <div className="flex justify-between mb-2">
-                <div className="text-xs">
-                  <span className="font-bold" style={{ color: msg.type === 'deal'? '#D4AF37' : '#FF3B30' }}>
-                    {msg.type.toUpperCase()} MESSAGE
-                  </span>
-                  <span className="text-[#666] ml-2">FROM: {msg.from}</span>
-                  <span className="text-[#666] ml-2">{msg.timestamp}</span>
-                </div>
-                <button onClick={function() { toggleFlag(msg.id) }} className="text-xs hover:text-[#FF3B30]">
-                  {msg.flagged? 'UNFLAG' : 'FLAG'}
-                </button>
-              </div>
-              
-              <div className="border-t border-[#333] pt-2 mb-2">
-                <div className="flex gap-3 mb-2">
-                  <img src={msg.photo} alt="" className="w-12 h-12 object-cover rounded" />
-                  <div>
-                    <div className="text-white text-sm font-bold">[SELLER] {msg.sellerName}</div>
-                    <div className="text-[#666] text-xs">PS: {msg.ps} {msg.vs? '| VS: ' + msg.vs : ''} | {msg.sellerPhone}</div>
-                    <div className="text-[#666] text-xs">{msg.sellerEmail}</div>
-                  </div>
-                </div>
-                <div className="text-white text-sm">{msg.address}</div>
-                <div className="text-[#999] text-xs mt-1">
-                  ASK: ${(msg.ask/1000).toFixed(0)}K | ARV: ${(msg.arv/1000).toFixed(0)}K | SPREAD: ${(msg.spread/1000).toFixed(0)}K
-                </div>
-              </div>
+        {filteredMessages.map((msg) => (
+          <div key={msg.id} className={`border-2 bg-[#1a1a1a] p-4 relative ${getBorderColor(msg.type)}`}>
+            {msg.unread && <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full animate-ping ${msg.type === 'deal' ? 'bg-[#D4AF37]' : 'bg-[#FF3B30]'}`} />}
 
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={function() { updateMessageStatus(msg.id, 'saved') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'saved'? 'bg-[#34C759] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]')}>
-                  [SAVE]
-                </button>
-                <button onClick={function() { updateMessageStatus(msg.id, 'archived') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]')}>
-                  [ARCHIVE]
-                </button>
-                <button onClick={function() { updateMessageStatus(msg.id, 'deleted') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'deleted'? 'bg-[#FF3B30] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FF3B30]')}>
-                  [DELETE]
-                </button>
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <div className={`text-xs font-bold ${msg.type === 'deal' ? 'text-[#D4AF37]' : 'text-[#FF3B30]'}`}>
+                  {msg.sender} • {msg.timestamp}
+                </div>
+                <div className="text-white font-bold text-sm mt-1">{msg.seller.address}</div>
+                <div className="text-[#666] text-xs">Seller: {msg.seller.name} | PS: {msg.seller.ps}</div>
+              </div>
+              <div className={`text-2xl ${msg.flagged ? 'text-[#D4AF37]' : 'text-[#333]'}`}>★</div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+              <div>
+                <div className="text-[#666]">ASK</div>
+                <div className="text-white font-bold">{formatCurrency(msg.deal.ask)}</div>
+              </div>
+              <div>
+                <div className="text-[#666]">ARV</div>
+                <div className="text-[#34C759] font-bold">{formatCurrency(msg.deal.arv)}</div>
+              </div>
+              <div>
+                <div className="text-[#666]">SPREAD</div>
+                <div className="text-white font-bold">{msg.deal.spread}%</div>
               </div>
             </div>
-          )
-        })}
+
+            <div className="bg-[#0D0D0D] border border-[#333] p-3 mb-3">
+              <div className="text-[#D4AF37] text-xs font-bold mb-1">MESSAGE:</div>
+              <div className="text-white text-xs">{msg.message}</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {msg.status !== 'archived' && (
+                <button onClick={() => updateStatus(msg.id, 'archived')} className="bg-[#FFA500] text-black py-2 text-xs font-bold">
+                  [ARCHIVE]
+                </button>
+              )}
+              {msg.status !== 'deleted' && (
+                <button onClick={() => updateStatus(msg.id, 'deleted')} className="bg-[#FF3B30] text-white py-2 text-xs font-bold">
+                  [DELETE]
+                </button>
+              )}
+              {msg.status !== 'saved' && (
+                <button onClick={() => updateStatus(msg.id, 'saved')} className="bg-[#34C759] text-white py-2 text-xs font-bold col-span-2">
+                  [RESTORE]
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0D0D0D] border-t border-[#333] grid grid-cols-4 text-xs">
+        <button onClick={() => router.push('/pain-room')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-[#FF3B30] font-bold">PAIN</div>
+          <div className="text-[#666]">ROOM</div>
+        </button>
+        <button onClick={() => router.push('/command')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-[#D4AF37] font-bold">DEAL</div>
+          <div className="text-[#666]">ROOM</div>
+        </button>
+        <button onClick={() => router.push('/messages')} className="py-4 text-center bg-[#1a1a1a]">
+          <div className="text-white font-bold">MSG</div>
+          <div className="text-[#666]">CENTER</div>
+        </button>
+        <button onClick={() => router.push('/dashboard')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-[#D4AF37] font-bold">HUB</div>
+          <div className="text-[#666]">HOME</div>
+        </button>
       </div>
     </main>
   )
 }
 
-export default function MessageCenter() {
+export default function Messages() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#0D0D0D] text-[#D4AF37] p-4">Loading Messages...</div>}>
-      <MessageCenterContent />
+      <MessagesContent />
     </Suspense>
   )
 }
