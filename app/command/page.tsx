@@ -5,64 +5,27 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-interface Buyer {
-  id: string
-  name: string
-  vaultScore: number
-  closes: number
-  cash: number
-  photo: string
-  phone: string
-  email: string
-  lastActive: string
-}
-
 interface Deal {
   id: string
-  status: 'saved' | 'archived' | 'deleted'
-  sellerName: string
-  sellerPhone: string
-  sellerEmail: string
-  photo: string
   address: string
-  city: string
-  state: string
-  zip: string
-  beds: number
-  baths: number
-  sqft: number
-  yearBuilt: number
   ask: number
   arv: number
-  spread: number
-  contractPrice: number
-  rehab: number
-  painScore: number
-  vaultScore: number
-  liens: string
-  title: string
-  dom: number
-  closeDate: string
-  exitStrategy: string
-  motivation: string[]
-  route: 'ALPHA' | 'AUCTION' | 'EXCHANGE'
-  buyersNotified: Buyer[]
-  firstLook: number
-  bidCount: number
-  highBid: number
-  isNew: boolean
-  unread: boolean
+  assignmentFee: number
+  ps: number
+  status: 'saved' | 'archived' | 'deleted'
+  route: 'alpha' | 'core' | 'blast'
+  routeExpires: number
+  buyers: { name: string; vs: number; cash: number }[]
   flagged: boolean
-  notes: string
-  photos: string[]
+  unread: boolean
 }
 
-function DealRoomContent() {
+function CommandContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [time, setTime] = useState('')
-  const [filter, setFilter] = useState(searchParams.get('status') || 'all')
-  
+  const [filter, setFilter] = useState(searchParams.get('status') || 'saved')
+
   useEffect(() => {
     setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
     const interval = setInterval(() => {
@@ -72,280 +35,178 @@ function DealRoomContent() {
   }, [])
 
   const [deals, setDeals] = useState<Deal[]>([
-    {
-      id: '1',
-      status: 'saved',
-      sellerName: 'John Smith',
-      sellerPhone: '404-555-0192',
-      sellerEmail: 'jsmith@gmail.com',
-      photo: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400',
-      address: '123 Main St',
-      city: 'Atlanta',
-      state: 'GA',
-      zip: '30308',
-      beds: 3,
-      baths: 2,
-      sqft: 1840,
-      yearBuilt: 1985,
-      ask: 180000,
-      arv: 285000,
-      spread: 22000,
-      contractPrice: 180000,
-      rehab: 25000,
-      painScore: 94,
-      vaultScore: 820,
-      liens: '$8.4K TAX',
-      title: 'CLEAN',
-      dom: 187,
-      closeDate: '2026-06-17',
-      exitStrategy: 'Wholesale',
-      motivation: ['DIVORCE', 'FORECLOSURE NOD', 'PROBATE'],
-      route: 'ALPHA',
-      buyersNotified: [
-        { id: 'jd', name: 'John D.', vaultScore: 847, closes: 12, cash: 340000, photo: 'https://i.pravatar.cc/150?img=1', phone: '404-555-1001', email: 'jd@vault.com', lastActive: '2h ago' },
-        { id: 'mr', name: 'Mike R.', vaultScore: 832, closes: 9, cash: 210000, photo: 'https://i.pravatar.cc/150?img=2', phone: '404-555-1002', email: 'mr@vault.com', lastActive: '1h ago' },
-        { id: 'sk', name: 'Sarah K.', vaultScore: 825, closes: 14, cash: 180000, photo: 'https://i.pravatar.cc/150?img=3', phone: '404-555-1003', email: 'sk@vault.com', lastActive: '5m ago' }
-      ],
-      firstLook: 1723,
-      bidCount: 0,
-      highBid: 0,
-      isNew: true,
-      unread: true,
-      flagged: false,
-      notes: 'Seller motivated. Wants 15 day close. Divorce case.',
-      photos: [
-        'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400',
-        'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400',
-        'https://images.unsplash.com/photo-1518780664697-55e365304249?w=400'
-      ]
-    }
+    { id: '1', address: '1428 Maple Ave, Detroit MI', ask: 142000, arv: 245000, assignmentFee: 18000, ps: 94, status: 'saved', route: 'alpha', routeExpires: 1728, buyers: [{name: 'Marcus King', vs: 920, cash: 450000}, {name: 'Sarah Chen', vs: 880, cash: 320000}, {name: 'Devon Wright', vs: 850, cash: 280000}], flagged: true, unread: true },
+    { id: '2', address: '8812 Oak St, Flint MI', ask: 98000, arv: 165000, assignmentFee: 12000, ps: 89, status: 'saved', route: 'core', routeExpires: 0, buyers: [{name: 'James Liu', vs: 790, cash: 180000}], flagged: false, unread: true },
+    { id: '3', address: '3341 Pine Dr, Warren MI', ask: 75000, arv: 128000, assignmentFee: 8500, ps: 76, status: 'saved', route: 'blast', routeExpires: 0, buyers: [], flagged: false, unread: false },
+    { id: '4', address: '9901 Elm Rd, Southfield MI', ask: 120000, arv: 185000, assignmentFee: 9500, ps: 68, status: 'archived', route: 'core', routeExpires: 0, buyers: [], flagged: false, unread: false },
   ])
 
-  const [timers, setTimers] = useState<Record<string, number>>({})
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTimers(function(prev) {
-        const updated = {...prev}
-        deals.forEach(function(deal) {
-          if (deal.firstLook > 0 && deal.route === 'ALPHA') {
-            const current = updated[deal.id]!== undefined? updated[deal.id] : deal.firstLook
-            if (current > 0) updated[deal.id] = current - 1
-          }
-        })
-        return updated
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [deals])
-
+  const filteredDeals = deals.filter(d => d.status === filter)
   const counts = {
-    saved: deals.filter(function(d) { return d.status === 'saved' }).length,
-    archived: deals.filter(function(d) { return d.status === 'archived' }).length,
-    deleted: deals.filter(function(d) { return d.status === 'deleted' }).length
+    saved: deals.filter(d => d.status === 'saved').length,
+    archived: deals.filter(d => d.status === 'archived').length,
+    deleted: deals.filter(d => d.status === 'deleted').length,
   }
 
-  const avgSpread = {
-    saved: Math.round(deals.filter(function(d) { return d.status === 'saved' }).reduce(function(a,b) { return a + b.spread }, 0) / (counts.saved || 1) / 1000),
-    archived: Math.round(deals.filter(function(d) { return d.status === 'archived' }).reduce(function(a,b) { return a + b.spread }, 0) / (counts.archived || 1) / 1000),
-    deleted: Math.round(deals.filter(function(d) { return d.status === 'deleted' }).reduce(function(a,b) { return a + b.spread }, 0) / (counts.deleted || 1) / 1000)
-  }
-
-  const alphaDeals = deals.filter(function(d) { return d.status === 'saved' && d.route === 'ALPHA' }).length
-  const unreadCount = deals.filter(function(d) { return d.unread }).length
-  const filteredDeals = filter === 'all'? deals.filter(function(d) { return d.status!== 'deleted' }) : deals.filter(function(d) { return d.status === filter })
-
-  const updateDealStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
-    setDeals(function(prev) {
-      return prev.map(function(d) {
-        return d.id === id? {...d, status: newStatus, unread: false, isNew: false} : d
-      })
-    })
+  const updateStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
+    setDeals(deals.map(d => d.id === id ? {...d, status: newStatus} : d))
   }
 
   const toggleFlag = (id: string) => {
-    setDeals(function(prev) {
-      return prev.map(function(d) {
-        return d.id === id? {...d, flagged:!d.flagged} : d
-      })
-    })
+    setDeals(deals.map(d => d.id === id ? {...d, flagged: !d.flagged} : d))
   }
 
-  const getBorderColor = (deal: Deal) => {
-    if (deal.route === 'ALPHA') return 'border-[#D4AF37]'
-    if (deal.route === 'AUCTION') return 'border-[#FFA500]'
-    if (deal.painScore >= 90) return 'border-[#FF3B30]'
+  const formatCurrency = (num: number) => `$${(num / 1000).toFixed(0)}K`
+  const calcSpread = (deal: Deal) => ((deal.arv - deal.ask) / deal.arv * 100).toFixed(0)
+  const calcProfit = (deal: Deal) => deal.arv - deal.ask - deal.assignmentFee
+
+  const getBorder = (deal: Deal) => {
+    if (deal.route === 'alpha') return 'border-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.4)]'
+    if (deal.ps >= 90) return 'border-[#FF3B30] shadow-[0_0_20px_rgba(255,59,48,0.4)]'
     return 'border-[#333]'
   }
 
-  const getGlow = (deal: Deal) => {
-    if (deal.route === 'ALPHA') return 'shadow-[0_0_20px_rgba(212,175,55,0.6)]'
-    if (deal.painScore >= 90) return 'shadow-[0_0_20px_rgba(255,59,48,0.6)]'
-    return ''
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return mins + ':' + secs.toString().padStart(2, '0')
-  }
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDeals(prev => prev.map(d => d.routeExpires > 0 ? {...d, routeExpires: d.routeExpires - 1} : d))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   return (
-    <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4">
-      <div className="border-b border-[#333] pb-4 mb-4">
-        <div className="flex justify-between items-center">
+    <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4 pb-20">
+      <div className="border-b border-[#333] pb-4 mb-6">
+        <div className="flex justify-between items-center mb-4">
           <div>
-            <div className="text-[#D4AF37] text-lg font-bold">DEAL ROOM</div>
+            <div className="text-[#D4AF37] text-xl font-bold">DEAL ROOM</div>
             <div className="text-[#666] text-xs">COMMAND CENTER</div>
           </div>
           <div className="text-[#666] text-xs text-right">
-            SESSION ACTIVE | TOTAL: {deals.length} | UNREAD: {unreadCount} |<br/>
-            {time} CST
+            SESSION ACTIVE | {time} CST
           </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => setFilter('saved')} className={`py-3 text-xs font-bold border ${filter === 'saved' ? 'border-[#D4AF37] bg-[#D4AF37] text-black' : 'border-[#333] text-[#666]'}`}>
+            SAVED [{counts.saved}]
+          </button>
+          <button onClick={() => setFilter('archived')} className={`py-3 text-xs font-bold border ${filter === 'archived' ? 'border-[#FFA500] bg-[#FFA500] text-black' : 'border-[#333] text-[#666]'}`}>
+            ARCHIVED [{counts.archived}]
+          </button>
+          <button onClick={() => setFilter('deleted')} className={`py-3 text-xs font-bold border ${filter === 'deleted' ? 'border-[#FF3B30] bg-[#FF3B30] text-white' : 'border-[#333] text-[#666]'}`}>
+            DELETED [{counts.deleted}]
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {(['saved', 'archived', 'deleted'] as const).map(function(status) {
-          const isActive = filter === status
-          const hasNew = deals.some(function(d) { return d.status === status && d.unread })
-          return (
-            <button
-              key={status}
-              onClick={function() { setFilter(status) }}
-              className={'border-2 p-3 text-left transition ' + (isActive? 'border-[#D4AF37] bg-[#1a1a1a]' : 'border-[#333] bg-[#0D0D0D]') + (hasNew? ' ring-2 ring-[#D4AF37] animate-pulse' : '')}
-            >
-              <div className="text-[#D4AF37] text-xs font-bold mb-1">DEAL {status.toUpperCase()}</div>
-              <div className="text-white text-2xl font-bold">{counts[status]}</div>
-              <div className="text-[#666] text-xs mt-1">
-                AVG: ${avgSpread[status]}K
-                {status === 'saved' && alphaDeals > 0 && <span className="text-[#D4AF37] ml-2">ALPHA: {alphaDeals}</span>}
-              </div>
-              <div className="text-[#D4AF37] text-xs mt-2">[VIEW ALL]</div>
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="flex gap-3 mb-4">
-        <button onClick={function() { router.push('/dashboard') }} className="px-4 py-2 border border-[#333] text-[#999] text-xs hover:border-[#D4AF37]">
-          BACK TO DASHBOARD
-        </button>
-        <button onClick={function() { router.push('/deal-intake') }} className="px-4 py-2 bg-[#D4AF37] text-[#0D0D0D] text-xs font-bold hover:bg-[#FFD700]">
-          + NEW DEAL
-        </button>
-      </div>
-
       <div className="space-y-3">
-        {filteredDeals.map(function(deal) {
-          const timeLeft = timers[deal.id]!== undefined? timers[deal.id] : deal.firstLook
-          const isFirstLook = deal.route === 'ALPHA' && timeLeft > 0
-          
-          return (
-            <div key={deal.id} className={'border-2 bg-[#1a1a1a] p-3 transition relative ' + getBorderColor(deal) + ' ' + getGlow(deal) + (deal.isNew? ' animate-pulse' : '')}>
-              {deal.unread && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#D4AF37] rounded-full animate-ping" />}
-              {deal.flagged && <div className="absolute -top-1 -left-1 text-[#FF3B30] text-lg">🚩</div>}
-              
-              <div className="flex justify-between items-start mb-3 pb-3 border-b border-[#333]">
-                <div className="flex gap-3">
-                  <img src={deal.photo} alt="" className="w-16 h-16 object-cover rounded" />
-                  <div>
-                    <div className="text-white text-sm font-bold">{deal.sellerName.toUpperCase()}</div>
-                    <div className="text-[#666] text-xs">Owner | {deal.city}, {deal.state} {deal.zip}</div>
-                    <div className="text-[#D4AF37] text-xs mt-1">{deal.sellerPhone}</div>
-                    <div className="text-[#666] text-xs">{deal.sellerEmail}</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[#D4AF37] text-sm font-bold">VS: {deal.vaultScore} ⚡</div>
-                  <div className="text-[#FF3B30] text-xs mt-1">PS: {deal.painScore} 🔥</div>
-                  <button onClick={function() { toggleFlag(deal.id) }} className="text-xs mt-1 hover:text-[#FF3B30]">
-                    {deal.flagged? 'UNFLAG' : 'FLAG'}
-                  </button>
-                </div>
+        {filteredDeals.map((deal) => (
+          <div key={deal.id} className={`border-2 bg-[#1a1a1a] p-4 relative ${getBorder(deal)}`}>
+            {deal.unread && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#D4AF37] rounded-full animate-ping" />}
+
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex-1">
+                <div className="text-white font-bold text-sm">{deal.address}</div>
+                <div className="text-[#666] text-xs">PS: {deal.ps} | ASK: {formatCurrency(deal.ask)}</div>
               </div>
+              <button onClick={() => toggleFlag(deal.id)} className={`text-2xl ${deal.flagged ? 'text-[#D4AF37]' : 'text-[#333]'}`}>
+                ★
+              </button>
+            </div>
 
-              {isFirstLook && (
-                <div className="mb-3 pb-3 border-b border-[#333]">
-                  <div className="text-[#D4AF37] text-xs font-bold mb-1">
-                    ROUTE: ALPHA VAULT → TOP 3 FIRST LOOK
-                  </div>
-                  <div className={'text-white text-sm font-bold ' + (timeLeft < 300? 'text-[#FF3B30] animate-pulse' : '')}>
-                    {formatTime(timeLeft)} LEFT
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-3">
-                <div className="text-white text-sm font-bold mb-1">{deal.address.toUpperCase()} {deal.city.toUpperCase()}, {deal.state}</div>
-                <div className="text-[#999] text-xs">{deal.beds}BD {deal.baths}BA {deal.sqft.toLocaleString()}SQFT | BUILT {deal.yearBuilt} | CONTRACT: ${(deal.contractPrice/1000).toFixed(0)}K</div>
+            {deal.route === 'alpha' && deal.routeExpires > 0 && (
+              <div className="bg-[#D4AF37] text-black text-xs font-bold p-2 mb-3 text-center">
+                ⚡ ROUTE: ALPHA VAULT → TOP 3 FIRST LOOK | {formatTime(deal.routeExpires)}
               </div>
+            )}
 
-              <div className="grid grid-cols-5 gap-2 mb-3 text-xs">
-                <div><div className="text-[#666]">ASK</div><div className="text-[#D4AF37] font-bold">${(deal.ask/1000).toFixed(0)}K</div></div>
-                <div><div className="text-[#666]">ARV</div><div className="text-white font-bold">${(deal.arv/1000).toFixed(0)}K</div></div>
-                <div><div className="text-[#666]">REHAB</div><div className="text-white font-bold">${(deal.rehab/1000).toFixed(0)}K</div></div>
-                <div><div className="text-[#666]">PROFIT</div><div className="text-[#D4AF37] font-bold">${(deal.spread/1000).toFixed(0)}K</div></div>
-                <div><div className="text-[#666]">%</div><div className="text-white font-bold">{Math.round((deal.spread/deal.arv)*100)}%</div></div>
+            <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
+              <div>
+                <div className="text-[#666]">ARV</div>
+                <div className="text-[#34C759] font-bold">{formatCurrency(deal.arv)}</div>
               </div>
-
-              <div className="text-xs mb-3 pb-3 border-b border-[#333]">
-                <span className="text-[#666]">LIENS:</span> <span className="text-white">{deal.liens}</span>
-                <span className="text-[#666] ml-3">TITLE:</span> <span className="text-white">{deal.title}</span>
-                <span className="text-[#666] ml-3">DOM:</span> <span className="text-white">{deal.dom}</span>
-                <span className="text-[#666] ml-3">CLOSE:</span> <span className="text-white">{deal.closeDate}</span>
+              <div>
+                <div className="text-[#666]">SPREAD</div>
+                <div className="text-white font-bold">{calcSpread(deal)}%</div>
               </div>
-
-              <div className="text-xs mb-3">
-                <span className="text-[#666]">MOTIVATION:</span> 
-                <span className="text-[#FF3B30] ml-2">{deal.motivation.join(' + ')}</span>
-                <span className="text-[#666] ml-3">EXIT:</span> 
-                <span className="text-[#D4AF37] ml-2">{deal.exitStrategy}</span>
+              <div>
+                <div className="text-[#666]">FEE</div>
+                <div className="text-[#D4AF37] font-bold">{formatCurrency(deal.assignmentFee)}</div>
               </div>
-
-              {deal.buyersNotified.length > 0 && (
-                <div className="mb-3 pb-3 border-b border-[#333]">
-                  <div className="text-[#666] text-xs mb-2">BUYERS NOTIFIED:</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {deal.buyersNotified.map(function(buyer) {
-                      return (
-                        <div key={buyer.id} className="flex items-center gap-2 bg-[#0D0D0D] border border-[#333] px-2 py-1 rounded">
-                          <img src={buyer.photo} alt="" className="w-6 h-6 rounded-full" />
-                          <div className="text-xs">
-                            <div className="text-white font-bold">VS{buyer.vaultScore}</div>
-                            <div className="text-[#666]">${(buyer.cash/1000).toFixed(0)}K</div>
-                          </div>
-                          <button className="text-[#D4AF37] text-xs hover:text-white">[MSG]</button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={function() { updateDealStatus(deal.id, 'saved') }} className={'py-3 text-xs font-bold rounded transition ' + (deal.status === 'saved'? 'bg-[#34C759] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]')}>
-                  
-                </button>
-                <button onClick={function() { updateDealStatus(deal.id, 'archived') }} className={'py-3 text-xs font-bold rounded transition ' + (deal.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]')}>
-                  [ARCHIVE]
-                </button>
-                <button onClick={function() { updateDealStatus(deal.id, 'deleted') }} className={'py-3 text-xs font-bold rounded transition ' + (deal.status === 'deleted'? 'bg-[#FF3B30] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FF3B30]')}>
-                  [DELETE]
-                </button>
+              <div>
+                <div className="text-[#666]">PROFIT</div>
+                <div className="text-[#34C759] font-bold">{formatCurrency(calcProfit(deal))}</div>
               </div>
             </div>
-          )
-        })}
+
+            {deal.buyers.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[#666] text-xs mb-2">MATCHED BUYERS:</div>
+                <div className="flex gap-2">
+                  {deal.buyers.map((b, i) => (
+                    <div key={i} className="flex-1 border border-[#333] p-2 text-xs">
+                      <div className="text-white font-bold">{b.name}</div>
+                      <div className="text-[#D4AF37]">VS: {b.vs}</div>
+                      <div className="text-[#666]">{formatCurrency(b.cash)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {deal.status !== 'archived' && (
+                <button onClick={() => updateStatus(deal.id, 'archived')} className="bg-[#FFA500] text-black py-2 text-xs font-bold">
+                  [ARCHIVE]
+                </button>
+              )}
+              {deal.status !== 'deleted' && (
+                <button onClick={() => updateStatus(deal.id, 'deleted')} className="bg-[#FF3B30] text-white py-2 text-xs font-bold">
+                  [DELETE]
+                </button>
+              )}
+              {deal.status !== 'saved' && (
+                <button onClick={() => updateStatus(deal.id, 'saved')} className="bg-[#34C759] text-white py-2 text-xs font-bold col-span-2">
+                  [RESTORE]
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0D0D0D] border-t border-[#333] grid grid-cols-4 text-xs">
+        <button onClick={() => router.push('/pain-room')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-[#FF3B30] font-bold">PAIN</div>
+          <div className="text-[#666]">ROOM</div>
+        </button>
+        <button onClick={() => router.push('/command')} className="py-4 text-center bg-[#1a1a1a]">
+          <div className="text-[#D4AF37] font-bold">DEAL</div>
+          <div className="text-[#666]">ROOM</div>
+        </button>
+        <button onClick={() => router.push('/messages')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-white font-bold">MSG</div>
+          <div className="text-[#666]">CENTER</div>
+        </button>
+        <button onClick={() => router.push('/dashboard')} className="py-4 text-center hover:bg-[#1a1a1a] transition">
+          <div className="text-[#D4AF37] font-bold">HUB</div>
+          <div className="text-[#666]">HOME</div>
+        </button>
       </div>
     </main>
   )
 }
 
-export default function DealRoom() {
+export default function Command() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0D0D0D] text-[#D4AF37] p-4">Loading Deal Room...</div>}>
-      <DealRoomContent />
+    <Suspense fallback={<div className="min-h-screen bg-[#0D0D0D] text-[#D4AF37] p-4">Loading Command...</div>}>
+      <CommandContent />
     </Suspense>
   )
 }
