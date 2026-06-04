@@ -1,10 +1,39 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 
 export default function HomePage() {
+  const [timeLeft, setTimeLeft] = useState({days: 27, hours: 5, mins: 36, secs: 50})
+  const [selectedState, setSelectedState] = useState('GA')
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev.secs > 0) return {...prev, secs: prev.secs - 1}
+        if (prev.mins > 0) return {...prev, mins: prev.mins - 1, secs: 59}
+        if (prev.hours > 0) return {...prev, hours: prev.hours - 1, mins: 59, secs: 59}
+        if (prev.days > 0) return {...prev, days: prev.days - 1, hours: 23, mins: 59, secs: 59}
+        return prev
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const seatData: Record<string, any> = {
+    GA: {wholesalers: '18/20 - 2 LEFT', buyers: '30/30 - WAITLIST', lenders: '7/10 - 3 LEFT', realtors: '12/15 - 3 LEFT', contractors: '8/10 - 2 LEFT', title: '4/5 - 1 LEFT'},
+    FL: {wholesalers: '20/20 - WAITLIST', buyers: '30/30 - WAITLIST', lenders: '10/10 - WAITLIST', realtors: '15/15 - WAITLIST', contractors: '10/10 - WAITLIST', title: '5/5 - WAITLIST'},
+    TX: {wholesalers: '16/20 - 4 LEFT', buyers: '28/30 - 2 LEFT', lenders: '6/10 - 4 LEFT', realtors: '11/15 - 4 LEFT', contractors: '7/10 - 3 LEFT', title: '3/5 - 2 LEFT'},
+    NC: {wholesalers: '14/20 - 6 LEFT', buyers: '25/30 - 5 LEFT', lenders: '5/10 - 5 LEFT', realtors: '9/15 - 6 LEFT', contractors: '6/10 - 4 LEFT', title: '2/5 - 3 LEFT'},
+    SC: {wholesalers: '11/20 - 9 LEFT', buyers: '22/30 - 8 LEFT', lenders: '4/10 - 6 LEFT', realtors: '7/15 - 8 LEFT', contractors: '5/10 - 5 LEFT', title: '2/5 - 3 LEFT'},
+    TN: {wholesalers: '9/20 - 11 LEFT', buyers: '19/30 - 11 LEFT', lenders: '3/10 - 7 LEFT', realtors: '6/15 - 9 LEFT', contractors: '4/10 - 6 LEFT', title: '1/5 - 4 LEFT'},
+    AL: {wholesalers: '7/20 - 13 LEFT', buyers: '16/30 - 14 LEFT', lenders: '2/10 - 8 LEFT', realtors: '5/15 - 10 LEFT', contractors: '3/10 - 7 LEFT', title: '1/5 - 4 LEFT'},
+  }
+
   return (
     <main className="bg-[#0D0D0D] text-white min-h-screen">
-      {/* STICKY TICKER */}
+      {/* TICKER */}
       <div className="bg-black border-b border-[#D4AF37] py-2 overflow-hidden whitespace-nowrap">
         <div className="animate-[scroll_30s_linear_infinite] inline-block text-[#D4AF37] text-xs font-semibold px-4">
           VAULTFORGE LIVE: Atlanta SFH Closed $22K Spread • 173 Founder Seats Left • GA Wholesalers: 2 LEFT • Day 91 = $499/mo Auto-Renews • Tampa Duplex Funded in 2HR • TX Lenders: 4 LEFT • FL Cash Buyers: WAITLIST • Join Before June 30 • 
@@ -14,7 +43,7 @@ export default function HomePage() {
       {/* NAV */}
       <nav className="flex justify-between items-center px-[5%] py-4 border-b border-[#222] bg-[#0D0D0D]/95 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <Image src="/IMG_4751.png" alt="VaultForge" width={50} height={50} />
+          <Image src="/IMG_4751.png" alt="VaultForge" width={50} height={50} priority />
           <div className="text-[#D4AF37] font-bold text-lg tracking-wider">VAULTFORGE OS</div>
         </div>
         <div className="flex gap-3">
@@ -26,7 +55,7 @@ export default function HomePage() {
 
       {/* HERO */}
       <section className="text-center px-[5%] py-20 bg-[radial-gradient(circle_at_50%_0%,#1a1a1a_0%,#0D0D0D_60%)]">
-        <Image src="/IMG_4751.png" alt="VaultForge" width={240} height={240} className="mx-auto mb-8 drop-shadow-[0_0_40px_rgba(212,175,55,0.3)]" />
+        <Image src="/IMG_4751.png" alt="VaultForge" width={240} height={240} className="mx-auto mb-8 drop-shadow-[0_0_40px_rgba(212,175,55,0.3)]" priority />
         <h1 className="text-4xl md:text-6xl font-black mb-4 tracking-tight">90-DAY BUILDER ACCESS</h1>
         <div className="text-6xl md:text-8xl text-[#D4AF37] font-black my-5">$299</div>
         <p className="text-[#999] text-lg max-w-2xl mx-auto mb-6 leading-relaxed">
@@ -36,22 +65,12 @@ export default function HomePage() {
         <p className="text-[#666] text-sm">VETERAN PRIDE. DISCIPLINE. STRATEGY. RESULTS.</p>
         
         <div className="flex justify-center gap-5 my-10">
-          <div className="bg-[#1a1a1a] border border-[#333] p-5 rounded-lg min-w-[80px]">
-            <div className="text-4xl font-black text-[#D4AF37]">27</div>
-            <div className="text-xs text-[#666] uppercase mt-1">Days</div>
-          </div>
-          <div className="bg-[#1a1a1a] border border-[#333] p-5 rounded-lg min-w-[80px]">
-            <div className="text-4xl font-black text-[#D4AF37]">05</div>
-            <div className="text-xs text-[#666] uppercase mt-1">Hours</div>
-          </div>
-          <div className="bg-[#1a1a1a] border border-[#333] p-5 rounded-lg min-w-[80px]">
-            <div className="text-4xl font-black text-[#D4AF37]">36</div>
-            <div className="text-xs text-[#666] uppercase mt-1">Mins</div>
-          </div>
-          <div className="bg-[#1a1a1a] border border-[#333] p-5 rounded-lg min-w-[80px]">
-            <div className="text-4xl font-black text-[#D4AF37]">50</div>
-            <div className="text-xs text-[#666] uppercase mt-1">Secs</div>
-          </div>
+          {Object.entries(timeLeft).map(([label, val]) => (
+            <div key={label} className="bg-[#1a1a1a] border border-[#333] p-5 rounded-lg min-w-[80px]">
+              <div className="text-4xl font-black text-[#D4AF37]">{val.toString().padStart(2, '0')}</div>
+              <div className="text-xs text-[#666] uppercase mt-1">{label}</div>
+            </div>
+          ))}
         </div>
 
         <div className="flex gap-4 justify-center mt-10">
@@ -148,7 +167,7 @@ export default function HomePage() {
           <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0D0D0D] border border-[#D4AF37] rounded-xl p-8">
             <h3 className="text-[#D4AF37] mb-5 text-xl font-bold">PAIN SCORE</h3>
             <div className="text-5xl font-black text-[#D4AF37]">94/100</div>
-            <div className="w-full h-2 bg-[#333] rounded my-4"><div className="h-full bg-gradient-to-r from-[#FF3B30] via-[#FFA500] to-[#D4AF37] rounded" style={{width: '94%'}}></div></div>
+            <div className="w-full h-2 bg-[#333] rounded my-4"><div className="h-full bg-gradient-to-r from-[#FF3B30] via-[#FFA500] to-[#D4AF37] rounded w-[94%]"></div></div>
             <div className="text-[#999] text-sm">HIGHLY MOTIVATED</div>
             <p className="text-[#999] text-xs mt-4">187 DOM • 3 Price Drops • Probate Filing • Tax Lien</p>
             <p className="text-[#D4AF37] text-xs mt-2">→ CALL NOW</p>
@@ -156,7 +175,7 @@ export default function HomePage() {
           <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0D0D0D] border border-[#D4AF37] rounded-xl p-8">
             <h3 className="text-[#D4AF37] mb-5 text-xl font-bold">VAULTSCORE</h3>
             <div className="text-5xl font-black text-[#D4AF37]">820/850</div>
-            <div className="w-full h-2 bg-[#333] rounded my-4"><div className="h-full bg-gradient-to-r from-[#FF3B30] via-[#FFA500] to-[#D4AF37] rounded" style={{width: '96%'}}></div></div>
+            <div className="w-full h-2 bg-[#333] rounded my-4"><div className="h-full bg-gradient-to-r from-[#FF3B30] via-[#FFA500] to-[#D4AF37] rounded w-[96%]"></div></div>
             <div className="text-[#999] text-sm">ALPHA DEAL</div>
             <p className="text-[#999] text-xs mt-4">28% Spread • $22K Profit • A+ Comps • Low Risk</p>
             <p className="text-[#D4AF37] text-xs mt-2">→ ALERTS TOP 3 BUYERS</p>
@@ -192,26 +211,23 @@ export default function HomePage() {
         <div className="bg-[#1a1a1a] border border-[#333] rounded-xl p-10">
           <h2 className="text-4xl font-black text-center mb-4">LIVE SEAT CAPS</h2>
           <p className="text-center text-[#999] mb-10 text-lg">Limited seats per state. When full, waitlist only.</p>
-          <select className="w-full p-4 bg-[#0D0D0D] border border-[#D4AF37] text-white rounded-lg text-base mb-8">
-            <option>Georgia (GA)</option>
-            <option>Florida (FL)</option>
-            <option>Texas (TX)</option>
-            <option>North Carolina (NC)</option>
-            <option>South Carolina (SC)</option>
-            <option>Tennessee (TN)</option>
-            <option>Alabama (AL)</option>
+          <select 
+            value={selectedState} 
+            onChange={(e) => setSelectedState(e.target.value)}
+            className="w-full p-4 bg-[#0D0D0D] border border-[#D4AF37] text-white rounded-lg text-base mb-8"
+          >
+            <option value="GA">Georgia (GA)</option>
+            <option value="FL">Florida (FL)</option>
+            <option value="TX">Texas (TX)</option>
+            <option value="NC">North Carolina (NC)</option>
+            <option value="SC">South Carolina (SC)</option>
+            <option value="TN">Tennessee (TN)</option>
+            <option value="AL">Alabama (AL)</option>
           </select>
-          {[
-            {role: "WHOLESALERS", count: "18/20 - 2 LEFT", color: "#FF3B30", pulse: true},
-            {role: "CASH BUYERS", count: "30/30 - WAITLIST", color: "#8B734B", pulse: false},
-            {role: "LENDERS", count: "7/10 - 3 LEFT", color: "#fff", pulse: false},
-            {role: "REALTORS", count: "12/15 - 3 LEFT", color: "#fff", pulse: false},
-            {role: "CONTRACTORS", count: "8/10 - 2 LEFT", color: "#fff", pulse: false},
-            {role: "TITLE/ATTORNEY", count: "4/5 - 1 LEFT", color: "#fff", pulse: false},
-          ].map((seat, i) => (
-            <div key={i} className="flex justify-between py-4 border-b border-[#222]">
-              <span className="text-white font-semibold">{seat.role}</span>
-              <span className={`font-bold ${seat.pulse? 'animate-pulse' : ''}`} style={{color: seat.color}}>{seat.count}</span>
+          {Object.entries(seatData[selectedState]).map(([role, count]) => (
+            <div key={role} className="flex justify-between py-4 border-b border-[#222]">
+              <span className="text-white font-semibold uppercase">{role.replace(/([A-Z])/g, ' $1').trim()}</span>
+              <span className={`font-bold ${count.includes('LEFT')? 'text-[#FF3B30] animate-pulse' : count.includes('WAITLIST')? 'text-[#8B734B]' : 'text-white'}`}>{count}</span>
             </div>
           ))}
         </div>
