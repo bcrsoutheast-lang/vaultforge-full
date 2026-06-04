@@ -60,7 +60,17 @@ interface Deal {
 function DealRoomContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [time, setTime] = useState('')
   const [filter, setFilter] = useState(searchParams.get('status') || 'all')
+  
+  useEffect(() => {
+    setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   const [deals, setDeals] = useState<Deal[]>([
     {
       id: '1',
@@ -223,9 +233,9 @@ function DealRoomContent() {
   }
 
   const avgSpread = {
-    saved: Math.round(deals.filter(d => d.status === 'saved').reduce((a,b) => a + b.spread, 0) / counts.saved / 1000 || 0),
-    archived: Math.round(deals.filter(d => d.status === 'archived').reduce((a,b) => a + b.spread, 0) / counts.archived / 1000 || 0),
-    deleted: Math.round(deals.filter(d => d.status === 'deleted').reduce((a,b) => a + b.spread, 0) / counts.deleted / 1000 || 0)
+    saved: Math.round(deals.filter(d => d.status === 'saved').reduce((a,b) => a + b.spread, 0) / (counts.saved || 1) / 1000),
+    archived: Math.round(deals.filter(d => d.status === 'archived').reduce((a,b) => a + b.spread, 0) / (counts.archived || 1) / 1000),
+    deleted: Math.round(deals.filter(d => d.status === 'deleted').reduce((a,b) => a + b.spread, 0) / (counts.deleted || 1) / 1000)
   }
 
   const alphaDeals = deals.filter(d => d.status === 'saved' && d.route === 'ALPHA').length
@@ -233,11 +243,11 @@ function DealRoomContent() {
   const filteredDeals = filter === 'all'? deals.filter(d => d.status!== 'deleted') : deals.filter(d => d.status === filter)
 
   const updateDealStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
-    setDeals(deals.map(d => d.id === id? {...d, status: newStatus, unread: false, isNew: false} : d))
+    setDeals(prev => prev.map(d => d.id === id? {...d, status: newStatus, unread: false, isNew: false} : d))
   }
 
   const toggleFlag = (id: string) => {
-    setDeals(deals.map(d => d.id === id? {...d, flagged:!d.flagged} : d))
+    setDeals(prev => prev.map(d => d.id === id? {...d, flagged:!d.flagged} : d))
   }
 
   const getBorderColor = (deal: Deal) => {
@@ -269,7 +279,7 @@ function DealRoomContent() {
           </div>
           <div className="text-[#666] text-xs text-right">
             SESSION ACTIVE | TOTAL: {deals.length} | UNREAD: {unreadCount} |<br/>
-            {new Date().toLocaleTimeString('en-US', {hour12: false})} CST
+            {time} CST
           </div>
         </div>
       </div>
@@ -360,84 +370,4 @@ function DealRoomContent() {
                 <span className="text-[#666]">MOTIVATION:</span> 
                 <span className="text-[#FF3B30] ml-2">{deal.motivation.join(' + ')}</span>
                 <span className="text-[#666] ml-3">EXIT:</span> 
-                <span className="text-[#D4AF37] ml-2">{deal.exitStrategy}</span>
-              </div>
-
-              <div className="mb-3 pb-3 border-b border-[#333]">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-xs">
-                    <span className="text-[#666]">ROUTE:</span> 
-                    <span className={`ml-2 font-bold ${
-                      deal.route === 'ALPHA'? 'text-[#D4AF37]' : 
-                      deal.route === 'AUCTION'? 'text-[#FFA500]' : 'text-[#999]'
-                    }`}>
-                      {deal.route} VAULT {isFirstLook && `→ TOP 3 FIRST LOOK`}
-                    </span>
-                  </div>
-                  {isFirstLook && (
-                    <div className={`text-xs font-bold ${timeLeft < 300? 'text-[#FF3B30] animate-pulse' : 'text-[#D4AF37]'}`}>
-                      {formatTime(timeLeft)} LEFT
-                    </div>
-                  )}
-                  {deal.route === 'AUCTION' && deal.bidCount > 0 && (
-                    <div className="text-xs">
-                      <span className="text-[#666]">BIDS:</span> 
-                      <span className="text-[#FFA500] ml-1 font-bold">{deal.bidCount}</span>
-                      <span className="text-[#666] ml-2">HIGH:</span> 
-                      <span className="text-white ml-1 font-bold">${(deal.highBid/1000).toFixed(0)}K</span>
-                    </div>
-                  )}
-                </div>
-                
-                {deal.buyersNotified.length > 0 && (
-                  <div>
-                    <div className="text-[#666] text-xs mb-2">BUYERS NOTIFIED:</div>
-                    <div className="flex gap-2 flex-wrap">
-                      {deal.buyersNotified.map(buyer => (
-                        <div key={buyer.id} className="flex items-center gap-1 bg-[#0D0D0D] px-2 py-1 rounded border border-[#333]">
-                          <img src={buyer.photo} alt="" className="w-4 h-4 rounded-full" />
-                          <div className="text-xs">
-                            <div className="text-[#D4AF37] font-bold">VS {buyer.vaultScore}</div>
-                            <div className="text-[#666]">{buyer.closes} closes</div>
-                          </div>
-                          <button className="text-[#666] text-xs hover:text-[#D4AF37] ml-1">[MSG]</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {deal.notes && (
-                <div className="text-xs mb-3 pb-3 border-b border-[#333]">
-                  <span className="text-[#666]">NOTES:</span> 
-                  <span className="text-[#999] ml-2">{deal.notes}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => updateDealStatus(deal.id, 'saved')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'saved'? 'bg-[#34C759] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]'}`}>
-                  
-                </button>
-                <button onClick={() => updateDealStatus(deal.id, 'archived')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]'}`}>
-                  [ARCHIVE]
-                </button>
-                <button onClick={() => updateDealStatus(deal.id, 'deleted')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'deleted'? 'bg-[#FF3B30] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FF3B30]'}`}>
-                  [DELETE]
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </main>
-  )
-}
-
-export default function DealRoom() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0D0D0D] text-[#D4AF37] p-4">Loading Deal Room...</div>}>
-      <DealRoomContent />
-    </Suspense>
-  )
-}
+                <span className="text-[#D4AF37] ml-2
