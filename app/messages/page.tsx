@@ -215,12 +215,8 @@ function MessageCenterContent() {
 
               <div className="grid grid-cols-3 gap-2">
                 <button onClick={function() { updateMessageStatus(msg.id, 'saved') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'saved'? 'bg-[#34C759] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]')}>
-                  
+                  [SAVE]
                 </button>
-                <button onClick={function() { updateMessageStatus(msg.id, 'archived') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]')}>
-                  [ARCHIVE]
-                </button>
-                <button onClick={function() { updateMessageStatus(msg.id, 'deleted') }} className   </button>
                 <button onClick={function() { updateMessageStatus(msg.id, 'archived') }} className={'py-2 text-xs font-bold rounded transition ' + (msg.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]')}>
                   [ARCHIVE]
                 </button>
