@@ -19,7 +19,7 @@ interface RouteCard {
 function DashboardContent() {
   const router = useRouter()
   const [time, setTime] = useState('')
-  
+
   useEffect(() => {
     setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
     const interval = setInterval(() => {
@@ -116,10 +116,10 @@ function DashboardContent() {
             className={`border-2 bg-[#1a1a1a] p-4 text-left transition relative ${getBorderColor(route.color)} ${getGlow(route)} ${route.unread? 'animate-pulse' : ''}`}
           >
             {route.unread && (
-              <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full animate-ping`} 
+              <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full animate-ping`}
                    style={{ backgroundColor: route.color === 'red'? '#FF3B30' : '#D4AF37' }} />
             )}
-            <div className="text-xs font-bold mb-2" 
+            <div className="text-xs font-bold mb-2"
                  style={{ color: route.color === 'gold'? '#D4AF37' : route.color === 'red'? '#FF3B30' : route.color === 'yellow'? '#FFA500' : '#34C759' }}>
               {route.title}
             </div>
@@ -127,13 +127,13 @@ function DashboardContent() {
             <div className="text-[#666] text-xs mb-2">
               {route.sublabel}
               {route.hotCount && route.hotCount > 0 && (
-                <span className={`ml-2 font-bold`} 
+                <span className={`ml-2 font-bold`}
                       style={{ color: route.color === 'red'? '#FF3B30' : '#D4AF37' }}>
                   {route.id.includes('alpha')? '⚡' : '🔥'} {route.hotCount}
                 </span>
               )}
             </div>
-            <div className="text-xs" 
+            <div className="text-xs"
                  style={{ color: route.color === 'gold'? '#D4AF37' : route.color === 'red'? '#FF3B30' : route.color === 'yellow'? '#FFA500' : '#34C759' }}>
               [ENTER]
             </div>
