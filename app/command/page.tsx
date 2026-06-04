@@ -1,5 +1,11 @@
 'use client'
 import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  'https://YOUR-PROJECT.supabase.co', // <-- REPLACE
+  'YOUR-ANON-KEY' // <-- REPLACE
+)
 
 export default function DealRoom() {
   const [showDealForm, setShowDealForm] = useState(false)
@@ -36,28 +42,56 @@ export default function DealRoom() {
     else if (spread > 30000) score += 30
     else if (spread > 15000) score += 20
     else score += 10
-    
     const statusMap: Record<string, number> = {ASSIGNABLE:25,DOUBLE_CLOSE:20,SUBJECT_TO:15,WRAP:10}
     score += statusMap[dealForm.contractStatus] || 0
-    
     const buyerMap: Record<string, number> = {CASH:20,HARD_MONEY:15,CONVENTIONAL:10,CREATIVE:5}
     score += buyerMap[dealForm.buyerType] || 0
-    
     if (dealForm.titleClear) score += 15
     return Math.min(score, 100)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const req = ['address','city','state','zip','askingPrice','arv','assignmentFee','dealType','contractStatus']
     if (req.some(f =>!dealForm[f as keyof typeof dealForm]) || dealForm.photos.length === 0) {
       setIncomplete(true)
       return
     }
+    
+    const photoUrls = await Promise.all(
+      dealForm.photos.map(async (file) => {
+        const fileName = `${Date.now()}-${file.name}`
+        const { error } = await supabase.storage.from('lead-photos').upload(fileName, file)
+        if (error) throw error
+        const { data } = supabase.storage.from('lead-photos').getPublicUrl(fileName)
+        return data.publicUrl
+      })
+    )
+
     const mao = calcMAO()
     const spread = calcSpread()
     const score = calcDealScore()
-    console.log('DEAL SAVED:', {...dealForm, mao, spread, dealScore: score})
-    alert(`DEAL SAVED\nMAO: $${mao.toLocaleString()}\nSPREAD: $${spread.toLocaleString()}\nSCORE: ${score}\nBUYERS MATCHED: 5`)
+    
+    const { error } = await supabase.from('deals').insert({
+     ...dealForm,
+      sqft: Number(dealForm.sqft) || null,
+      year_built: Number(dealForm.yearBuilt) || null,
+      asking_price: Number(dealForm.askingPrice),
+      arv: Number(dealForm.arv),
+      repairs: Number(dealForm.repairs) || null,
+      assignment_fee: Number(dealForm.assignmentFee),
+      emd_amount: Number(dealForm.emdAmount) || null,
+      mao: mao,
+      spread: spread,
+      deal_score: score,
+      contract_date: dealForm.contractDate || null,
+      close_date: dealForm.closeDate || null,
+      inspection_end: dealForm.inspectionEnd || null,
+      photos: photoUrls,
+      buyer_match: 5
+    })
+    
+    if (error) return alert('ERROR: ' + error.message)
+    alert(`DEAL SAVED\nMAO: $${mao.toLocaleString()}\nSPREAD: $${spread.toLocaleString()}\nSCORE: ${score}`)
     setShowDealForm(false)
     setIncomplete(false)
   }
@@ -111,7 +145,7 @@ export default function DealRoom() {
 
               {incomplete && <div className="bg-red-600 p-2 text-center text-xs font-bold">INCOMPLETE: FILL REQUIRED + UPLOAD MIN 1 PHOTO</div>}
 
-              <div className="p-3 space-y-2 max-h- overflow-y-auto text-xs">
+              <div className="p-3 space-y-2 max-h-96 overflow-y-auto text-xs">
                 {[
                   {l:'PROPERTY ADDRESS *',k:'address'},{l:'CITY *',k:'city'},
                   {l:'STATE *',k:'state',t:'select',o:['AL','GA','FL','TX','CA','NY','IL','OH']},
@@ -149,7 +183,7 @@ export default function DealRoom() {
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     {[{l:'TITLE CLEAR',k:'titleClear'},{l:'TENANT OCCUPIED',k:'tenantOccupied'},{l:'HAS ACCESS',k:'hasAccess'},{l:'MEDIA DONE',k:'mediaDone'},{l:'BUYER LIST BLASTED',k:'buyerBlasted'}].map(f => (
                       <label key={f.k} className="flex items-center gap-2">
-                        <input type="checkbox" checked={dealForm[f.k as keyof typeof dealForm] as boolean} 
+                        <input type="checkbox" checked={dealForm[f.k as keyof typeof form] as boolean} 
                           onChange={e => setDealForm({...dealForm, [f.k]: e.target.checked})} />
                         <span>{f.l}</span>
                       </label>
