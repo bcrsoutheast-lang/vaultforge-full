@@ -42,4 +42,60 @@
       width: 100%;
       padding: 15px;
       background: #D4AF37;
-      color: #000
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover { background: #e5c158; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="IMG_4751.png" alt="VaultForge Logo">
+    <h1>VAULTFORGE</h1>
+    <p>Elite Protection. Request Access.</p>
+    
+    <form action="https://formspree.io/f/maqznpra" method="POST">
+      <label>Full Name</label>
+      <input type="text" name="name" required>
+      
+      <label>Email</label>
+      <input type="email" name="email" required>
+      
+      <label>Phone</label>
+      <input type="tel" name="phone" required>
+      
+      <label>Business Name</label>
+      <input type="text" name="business">
+      
+      <label>Revenue Range</label>
+      <select name="revenue" required>
+        <option value="">Select...</option>
+        <option>$0 - $100K</option>
+        <option>$100K - $500K</option>
+        <option>$500K - $1M</option>
+        <option>$1M+</option>
+      </select>
+      
+      <label>Primary Threat Concern</label>
+      <select name="threat" required>
+        <option value="">Select...</option>
+        <option>Lawsuits</option>
+        <option>IRS/Tax Issues</option>
+        <option>Divorce</option>
+        <option>Business Partners</option>
+        <option>Asset Protection</option>
+      </select>
+      
+      <label>Additional Details</label>
+      <textarea name="message" rows="4" placeholder="Tell us about your situation..."></textarea>
+      
+      <button type="submit">REQUEST ELITE ACCESS</button>
+    </form>
+  </div>
+</body>
+</html>
