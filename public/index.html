@@ -1,97 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VaultForge Access</title>
-  <style>
-    body {
-      background: #000;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      padding: 20px;
-      margin: 0;
-    }
-    .container {
-      max-width: 500px;
-      margin: 40px auto;
-      background: #0a0a0a;
-      border: 1px solid #D4AF37;
-      border-radius: 8px;
-      padding: 30px;
-    }
-    h1 { color: #D4AF37; text-align: center; margin: 0 0 10px 0; }
-    p { text-align: center; color: #aaa; margin-bottom: 30px; }
-    input, select, textarea {
-      width: 100%;
-      padding: 12px;
-      margin: 8px 0 16px 0;
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #fff;
-      box-sizing: border-box;
-      font-size: 16px;
-    }
-    label { color: #D4AF37; font-size: 14px; font-weight: 600; }
-    button {
-      width: 100%;
-      padding: 15px;
-      background: #D4AF37;
-      color: #000;
-      border: none;
-      border-radius: 4px;
-      font-weight: bold;
-      font-size: 16px;
-      margin-top: 10px;
-      cursor: pointer;
-    }
-    img { display: block; margin: 0 auto 20px auto; max-width: 120px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaultForge</title>
 </head>
-<body>
-  <div class="container">
-    <img src="IMG_4751.png" alt="VaultForge Logo">
-    <h1>VAULTFORGE</h1>
-    <p>Elite Protection. Request Access.</p>
-    
-    <form action="https://formspree.io/f/maqznpra" method="POST">
-      <label>Full Name</label>
-      <input type="text" name="name" required>
-      
-      <label>Email</label>
-      <input type="email" name="email" required>
-      
-      <label>Phone</label>
-      <input type="tel" name="phone" required>
-      
-      <label>Business Name</label>
-      <input type="text" name="business">
-      
-      <label>Revenue Range</label>
-      <select name="revenue" required>
-        <option value="">Select...</option>
-        <option>$0 - $100K</option>
-        <option>$100K - $500K</option>
-        <option>$500K - $1M</option>
-        <option>$1M+</option>
-      </select>
-      
-      <label>Primary Threat Concern</label>
-      <select name="threat" required>
-        <option value="">Select...</option>
-        <option>Lawsuits</option>
-        <option>IRS/Tax Issues</option>
-        <option>Divorce</option>
-        <option>Business Partners</option>
-        <option>Asset Protection</option>
-      </select>
-      
-      <label>Additional Details</label>
-      <textarea name="message" rows="4" placeholder="Tell us about your situation..."></textarea>
-      
-      <button type="submit">REQUEST ELITE ACCESS</button>
-    </form>
-  </div>
+<body style="background:#000;color:#fff;font-family:sans-serif;padding:20px;max-width:500px;margin:auto;">
+<img src="IMG_4751.png" alt="Logo" style="width:120px;display:block;margin:20px auto;">
+<h1 style="color:#D4AF37;text-align:center;">VAULTFORGE</h1>
+<p style="text-align:center;color:#aaa;">Elite Protection. Request Access.</p>
+
+<form action="https://formspree.io/f/maqznpra" method="POST">
+<label style="color:#D4AF37;">Full Name</label><br>
+<input type="text" name="name" required style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;"><br>
+
+<label style="color:#D4AF37;">Email</label><br>
+<input type="email" name="email" required style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;"><br>
+
+<label style="color:#D4AF37;">Phone</label><br>
+<input type="tel" name="phone" required style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;"><br>
+
+<label style="color:#D4AF37;">Business Name</label><br>
+<input type="text" name="business" style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;"><br>
+
+<label style="color:#D4AF37;">Revenue Range</label><br>
+<select name="revenue" required style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;">
+<option value="">Select...</option><option>$0 - $100K</option><option>$100K - $500K</option><option>$500K - $1M</option><option>$1M+</option>
+</select><br>
+
+<label style="color:#D4AF37;">Primary Threat</label><br>
+<select name="threat" required style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;">
+<option value="">Select...</option><option>Lawsuits</option><option>IRS/Tax Issues</option><option>Divorce</option><option>Business Partners</option><option>Asset Protection</option>
+</select><br>
+
+<label style="color:#D4AF37;">Additional Details</label><br>
+<textarea name="message" rows="4" style="width:100%;padding:10px;margin:5px 0 15px 0;background:#111;border:1px solid #333;color:#fff;"></textarea><br>
+
+<button type="submit" style="width:100%;padding:15px;background:#D4AF37;color:#000;border:none;font-weight:bold;font-size:16px;">REQUEST ELITE ACCESS</button>
+</form>
 </body>
 </html>
