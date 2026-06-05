@@ -3,744 +3,946 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VaultForge | Buyer Access Portal</title>
+<meta name="description" content="VaultForge - Private 48hr real estate deals for serious investors. Veteran-owned. 1% fee at close.">
+<meta property="og:title" content="VaultForge - Fortify Your Portfolio">
+<meta property="og:description" content="Private 48hr deals. Seller recordings. $0 to browse.">
+<meta property="og:image" content="./IMG_4751.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<title>VaultForge - Private 48hr Deals | Veteran-Owned Real Estate</title>
+
+<!-- ========================================
+     GOOGLE FONTS - MILITARY + MODERN
+     ======================================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<!-- ========================================
+     CORE STYLES - PRODUCTION BUILD
+     ======================================== -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Roboto+Condensed:wght@700&display=swap');
-
-:root {
-  --black: #000000;
-  --gold: #D4AF37;
-  --gold-light: #E6C567;
-  --gold-dark: #B8941F;
-  --gray-900: #0A0A0A;
-  --gray-800: #1A1A1A;
-  --gray-700: #2A2A2A;
-  --gray-300: #B0B0B0;
-  --white: #FFFFFF;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Montserrat', sans-serif;
-  background: var(--black);
-  color: var(--white);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem 1rem;
-  position: relative;
-  overflow-x: hidden;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 20%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.container {
-  width: 100%;
-  max-width: 700px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-  animation: fadeInUp 0.8s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 2.5rem;
-}
-
-.logo {
-  max-width: 450px;
-  width: 100%;
-  height: auto;
-  margin: 0 auto 1.5rem;
-  display: block;
-  filter: drop-shadow(0 0 20px rgba(212, 175, 55, 0.2));
-  transition: transform 0.3s ease, filter 0.3s ease;
-}
-
-.logo:hover {
-  transform: scale(1.02);
-  filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.4));
-}
-
-h1 {
-  font-family: 'Roboto Condensed', sans-serif;
-  font-size: clamp(2.5rem, 8vw, 4rem);
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 0.75rem;
-  text-shadow: 0 0 40px rgba(212, 175, 55, 0.3);
-}
-
-.tagline {
-  font-size: clamp(0.75rem, 2.5vw, 0.95rem);
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  color: var(--gold);
-  text-transform: uppercase;
-  margin-bottom: 0.5rem;
-}
-
-.sub-tagline {
-  font-size: clamp(0.65rem, 2vw, 0.85rem);
-  font-weight: 300;
-  letter-spacing: 0.15em;
-  color: var(--gray-300);
-  text-transform: uppercase;
-}
-
-.terms-box {
-  background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%);
-  border: 2px solid var(--gold);
-  border-radius: 8px;
-  padding: 1.75rem 1.5rem;
-  margin-bottom: 2.5rem;
-  position: relative;
-  box-shadow: 
-    0 0 0 1px rgba(212, 175, 55, 0.2),
-    0 10px 40px rgba(212, 175, 55, 0.15),
-    inset 0 1px 0 rgba(212, 175, 55, 0.1);
-}
-
-.terms-box::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, var(--gold), var(--gold-light), var(--gold));
-  border-radius: 8px;
-  z-index: -1;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.terms-box:hover::before {
-  opacity: 0.3;
-}
-
-.terms-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--gold);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.terms-list {
-  list-style: none;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.terms-list li {
-  padding-left: 1.5rem;
-  position: relative;
-  font-size: 0.95rem;
-  line-height: 1.6;
-  color: var(--white);
-}
-
-.terms-list li::before {
-  content: '◆';
-  position: absolute;
-  left: 0;
-  color: var(--gold);
-  font-size: 0.8rem;
-}
-
-.form-section {
-  background: var(--gray-900);
-  border: 1px solid var(--gray-700);
-  border-radius: 8px;
-  padding: 2rem 1.5rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-.form-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--gold);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.5rem;
-  text-align: center;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--gold-light);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-}
-
-label .required {
-  color: var(--gold);
-  margin-left: 0.25rem;
-}
-
-input[type="text"],
-input[type="tel"],
-input[type="email"],
-select {
-  width: 100%;
-  padding: 0.875rem 1rem;
-  background: var(--gray-800);
-  border: 1px solid var(--gray-700);
-  border-radius: 6px;
-  color: var(--white);
-  font-family: 'Montserrat', sans-serif;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-}
-
-input[type="text"]:focus,
-input[type="tel"]:focus,
-input[type="email"]:focus,
-select:focus {
-  outline: none;
-  border-color: var(--gold);
-  background: var(--black);
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
-}
-
-select {
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  padding-right: 2.5rem;
-}
-
-.checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  padding: 0.625rem;
-  background: var(--gray-800);
-  border: 1px solid var(--gray-700);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.checkbox-item:hover {
-  border-color: var(--gold);
-  background: var(--gray-700);
-}
-
-.checkbox-item input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  margin-right: 0.75rem;
-  cursor: pointer;
-  accent-color: var(--gold);
-}
-
-.checkbox-item label {
-  margin: 0;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--white);
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.file-input-wrapper {
-  position: relative;
-  display: block;
-}
-
-input[type="file"] {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-}
-
-.file-input-label {
-  display: block;
-  padding: 0.875rem 1rem;
-  background: var(--gray-800);
-  border: 2px dashed var(--gray-700);
-  border-radius: 6px;
-  color: var(--gray-300);
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  font-weight: 400;
-  text-transform: none;
-}
-
-.file-input-label:hover,
-input[type="file"]:focus + .file-input-label {
-  border-color: var(--gold);
-  color: var(--gold-light);
-  background: var(--black);
-}
-
-.file-name {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--gold);
-  word-break: break-all;
-}
-
-.submit-btn {
-  width: 100%;
-  padding: 1.125rem 2rem;
-  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
-  border: none;
-  border-radius: 6px;
-  color: var(--black);
-  font-family: 'Montserrat', sans-serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 
-    0 4px 15px rgba(212, 175, 55, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.submit-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transition: left 0.5s ease;
-}
-
-.submit-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 6px 25px rgba(212, 175, 55, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.submit-btn:hover::before {
-  left: 100%;
-}
-
-.submit-btn:active {
-  transform: translateY(0);
-}
-
-.disclaimer {
-  margin-top: 1rem;
-  font-size: 0.75rem;
-  color: var(--gray-300);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.footer {
-  margin-top: 3rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--gray-800);
-  text-align: center;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--gold);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-}
-
-.error-message {
-  color: #FF6B6B;
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-  display: none;
-}
-
-.form-group.error input,
-.form-group.error select {
-  border-color: #FF6B6B;
-}
-
-.form-group.error .error-message {
-  display: block;
-}
-
-@media (max-width: 640px) {
-  body {
-    padding: 1.5rem 0.75rem;
+  /* ========================================
+     RESET & BASE
+     ======================================== */
+  *, *::before, *::after { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
   }
   
-  .terms-box,
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body { 
+    background: #000000; 
+    color: #FFFFFF; 
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; 
+    line-height: 1.6;
+    font-size: 16px;
+    overflow-x: hidden;
+  }
+  
+  /* ========================================
+     SCROLLBAR - MILITARY GOLD
+     ======================================== */
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { 
+    background: #D4AF37; 
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #C5A030; }
+
+  /* ========================================
+     CONTAINER & LAYOUT
+     ======================================== */
+  .container { 
+    max-width: 700px; 
+    margin: 0 auto; 
+    padding: 50px 20px 60px;
+    position: relative;
+  }
+  
+  .container::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .container > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ========================================
+     LOGO - CENTERED WITH GLOW
+     ======================================== */
+  .logo-wrapper {
+    text-align: center;
+    margin-bottom: 35px;
+    animation: fadeInDown 0.8s ease-out;
+  }
+  
+  .logo { 
+    display: inline-block; 
+    max-width: 480px; 
+    width: 90%; 
+    height: auto;
+    filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.4));
+    transition: transform 0.3s ease, filter 0.3s ease;
+  }
+  
+  .logo:hover {
+    transform: scale(1.02);
+    filter: drop-shadow(0 0 40px rgba(212, 175, 55, 0.6));
+  }
+
+  /* ========================================
+     HEADER - TYPOGRAPHY
+     ======================================== */
+  h1 { 
+    color: #D4AF37; 
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px; 
+    text-align: center; 
+    margin-bottom: 10px; 
+    letter-spacing: 4px;
+    text-shadow: 0 0 40px rgba(212, 175, 55, 0.6);
+    animation: fadeIn 1s ease-out 0.2s both;
+  }
+  
+  .tagline { 
+    text-align: center; 
+    font-size: 17px; 
+    color: #D4AF37; 
+    margin-bottom: 10px; 
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    animation: fadeIn 1s ease-out 0.4s both;
+  }
+  
+  .subtag { 
+    text-align: center; 
+    font-size: 12px; 
+    color: #777; 
+    margin-bottom: 45px; 
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    animation: fadeIn 1s ease-out 0.6s both;
+  }
+
+  /* ========================================
+     BUYER TERMS CARD - PREMIUM
+     ======================================== */
+  .rules { 
+    background: linear-gradient(135deg, #0f0f0f 0%, #080808 100%);
+    border: 2px solid #D4AF37; 
+    padding: 30px; 
+    margin-bottom: 40px; 
+    border-radius: 8px;
+    box-shadow: 
+      0 0 60px rgba(212, 175, 55, 0.15),
+      inset 0 1px 0 rgba(212, 175, 55, 0.1);
+    animation: fadeInUp 0.8s ease-out 0.8s both;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .rules::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #D4AF37, transparent);
+    animation: shimmer 3s infinite;
+  }
+  
+  .rules h3 { 
+    color: #D4AF37; 
+    font-size: 20px; 
+    margin-bottom: 20px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .rules h3::before {
+    content: '⚡';
+    font-size: 24px;
+  }
+  
+  .rules ul { list-style: none; }
+  
+  .rules li { 
+    padding: 12px 0; 
+    border-bottom: 1px solid #1a1a1a; 
+    font-size: 14px;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .rules li:last-child { border-bottom: none; }
+  
+  .rules li::before { 
+    content: "▸"; 
+    color: #D4AF37; 
+    font-weight: bold;
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: -2px;
+  }
+
+  /* ========================================
+     FORM - STRUCTURE
+     ======================================== */
+  form { 
+    margin-top: 40px;
+    animation: fadeInUp 0.8s ease-out 1s both;
+  }
+  
   .form-section {
-    padding: 1.5rem 1.25rem;
+    margin-bottom: 35px;
   }
   
-  .checkbox-grid {
-    grid-template-columns: 1fr;
+  .section-title {
+    color: #D4AF37;
+    font-size: 15px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin: 35px 0 18px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-}
+  
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 18px;
+    background: #D4AF37;
+    border-radius: 2px;
+  }
+  
+  .form-group { 
+    margin-bottom: 24px;
+    position: relative;
+  }
+  
+  label { 
+    display: block; 
+    color: #D4AF37; 
+    font-size: 13px; 
+    margin-bottom: 9px; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 0.9px;
+    transition: color 0.2s;
+  }
+  
+  .required::after {
+    content: ' *';
+    color: #8B0000;
+  }
+  
+  input, select, textarea { 
+    width: 100%; 
+    padding: 16px 18px; 
+    background: #050505; 
+    border: 2px solid #1a1a1a; 
+    color: #fff; 
+    font-size: 16px; 
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  input:hover, select:hover, textarea:hover {
+    border-color: #2a2a2a;
+  }
+  
+  input:focus, select:focus, textarea:focus { 
+    outline: none; 
+    border-color: #D4AF37;
+    background: #0a0a0a;
+    box-shadow: 
+      0 0 0 4px rgba(212, 175, 55, 0.1),
+      0 4px 12px rgba(212, 175, 55, 0.15);
+    transform: translateY(-1px);
+  }
+  
+  input::placeholder {
+    color: #444;
+  }
+  
+  /* ========================================
+     VALIDATION STATES
+     ======================================== */
+  input.error, select.error {
+    border-color: #8B0000;
+    background: #1a0505;
+  }
+  
+  input.error:focus, select.error:focus {
+    box-shadow: 0 0 0 4px rgba(139, 0, 0, 0.2);
+  }
+  
+  input.success, select.success {
+    border-color: #2d5016;
+    background: #0a1a05;
+  }
+  
+  .error-message {
+    color: #8B0000;
+    font-size: 12px;
+    margin-top: 6px;
+    display: none;
+    font-weight: 600;
+  }
+  
+  .error-message.show {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+  }
 
-.success-message {
-  display: none;
-  background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%);
-  border: 2px solid var(--gold);
-  border-radius: 8px;
-  padding: 2rem;
-  text-align: center;
-  margin-top: 2rem;
-}
+  /* ========================================
+     CHECKBOX GROUPS - PREMIUM
+     ======================================== */
+  .checkbox-group { 
+    background: #050505; 
+    border: 2px solid #1a1a1a; 
+    padding: 20px; 
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    transition: border-color 0.3s;
+  }
+  
+  .checkbox-group:hover {
+    border-color: #2a2a2a;
+  }
+  
+  .checkbox-group.error {
+    border-color: #8B0000;
+    background: #1a0505;
+  }
+  
+  .checkbox-item {
+    position: relative;
+  }
+  
+  .checkbox-item label { 
+    text-transform: none; 
+    font-weight: 500; 
+    display: flex; 
+    align-items: center; 
+    color: #e0e0e0; 
+    font-size: 15px;
+    margin: 0;
+    cursor: pointer;
+    padding: 12px 14px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
+  }
+  
+  .checkbox-item label:hover { 
+    background: #111; 
+    border-color: #2a2a2a;
+    transform: translateX(2px);
+  }
+  
+  .checkbox-item input[type="checkbox"] { 
+    width: 20px;
+    height: 20px;
+    margin: 0 12px 0 0; 
+    padding: 0;
+    cursor: pointer;
+    accent-color: #D4AF37;
+    flex-shrink: 0;
+  }
+  
+  .checkbox-item input[type="checkbox"]:checked + span {
+    color: #D4AF37;
+    font-weight: 600;
+  }
 
-.success-message.show {
-  display: block;
-  animation: fadeInUp 0.5s ease-out;
-}
+  /* ========================================
+     FILE UPLOAD - DRAG & DROP
+     ======================================== */
+  .file-upload-wrapper {
+    position: relative;
+  }
+  
+  input[type="file"] {
+    padding: 12px;
+    cursor: pointer;
+    border-style: dashed;
+  }
+  
+  input[type="file"]::-webkit-file-upload-button {
+    background: #D4AF37;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    margin-right: 15px;
+    transition: all 0.2s;
+  }
+  
+  input[type="file"]::-webkit-file-upload-button:hover {
+    background: #C5A030;
+    transform: scale(1.05);
+  }
+  
+  .file-info {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+  }
+  
+  .file-preview {
+    margin-top: 12px;
+    padding: 12px;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .file-preview.show {
+    display: flex;
+  }
+  
+  .file-preview-icon {
+    width: 40px;
+    height: 40px;
+    background: #D4AF37;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+  
+  .file-preview-info {
+    flex: 1;
+  }
+  
+  .file-preview-name {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  
+  .file-preview-size {
+    color: #888;
+    font-size: 12px;
+  }
 
-.success-message h3 {
-  color: var(--gold);
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-}
+  /* ========================================
+     SUBMIT BUTTON - PREMIUM
+     ======================================== */
+  .button-wrapper {
+    margin-top: 40px;
+    position: relative;
+  }
+  
+  button[type="submit"] { 
+    width: 100%; 
+    padding: 22px; 
+    background: linear-gradient(135deg, #D4AF37 0%, #C5A030 50%, #D4AF37 100%);
+    background-size: 200% 100%;
+    color: #000; 
+    border: none; 
+    font-size: 19px; 
+    font-weight: 900; 
+    letter-spacing: 2.5px; 
+    cursor: pointer; 
+    border-radius: 6px; 
+    text-transform: uppercase;
+    font-family: 'Bebas Neue', sans-serif;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 6px 25px rgba(212, 175, 55, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  button[type="submit"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s;
+  }
+  
+  button[type="submit"]:hover { 
+    background-position: 100% 0;
+    box-shadow: 
+      0 8px 35px rgba(212, 175, 55, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: translateY(-3px);
+  }
+  
+  button[type="submit"]:hover::before {
+    left: 100%;
+  }
+  
+  button[type="submit"]:active { 
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+  }
+  
+  button[type="submit"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .button-loading {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(0,0,0,0.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto;
+  }
+  
+  button.loading .button-text {
+    display: none;
+  }
+  
+  button.loading .button-loading {
+    display: block;
+  }
 
-.success-message p {
-  color: var(--gray-300);
-  line-height: 1.6;
-}
+  /* ========================================
+     DISCLAIMER & FOOTER
+     ======================================== */
+  .disclaimer { 
+    text-align: center; 
+    font-size: 11px; 
+    color: #555; 
+    margin-top: 40px; 
+    line-height: 1.7;
+    padding: 20px;
+    background: #050505;
+    border-radius: 6px;
+    border: 1px solid #1a1a1a;
+  }
+  
+  .footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 1px solid #1a1a1a;
+    color: #666;
+    font-size: 12px;
+  }
+  
+  .footer-brand {
+    color: #D4AF37;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  /* ========================================
+     ANIMATIONS
+     ======================================== */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ========================================
+     RESPONSIVE - MOBILE FIRST
+     ======================================== */
+  @media (max-width: 768px) { 
+    .container { padding: 30px 15px 50px; } 
+    h1 { font-size: 38px; letter-spacing: 3px; } 
+    .logo { max-width: 340px; }
+    .checkbox-group { grid-template-columns: 1fr; }
+    .rules { padding: 20px; }
+    button[type="submit"] { font-size: 17px; padding: 20px; }
+  }
+  
+  @media (max-width: 480px) {
+    h1 { font-size: 32px; }
+    .tagline { font-size: 15px; }
+    .subtag { font-size: 11px; }
+    .logo { max-width: 280px; }
+  }
+  
+  /* ========================================
+     PRINT STYLES
+     ======================================== */
+  @media print {
+    body { background: white; color: black; }
+    .logo, button { display: none; }
+  }
 </style>
 </head>
 <body>
-<div class="container">
-  <header class="header">
-    <img src="./logo.png" alt="VaultForge" class="logo">
+  <div class="container">
+    <!-- ========================================
+         LOGO - CENTERED
+         ======================================== -->
+    <div class="logo-wrapper">
+      <img src="./IMG_4751.png" alt="VaultForge - Veteran-Owned Real Estate Investment Platform" class="logo">
+    </div>
+    
+    <!-- ========================================
+         HEADER
+         ======================================== -->
     <h1>VAULTFORGE</h1>
-    <p class="tagline">FORTIFY YOUR PORTFOLIO</p>
-    <p class="sub-tagline">VETERAN PRIDE. DISCIPLINE. STRATEGY. RESULTS.</p>
-  </header>
+    <div class="tagline">Fortify Your Portfolio</div>
+    <div class="subtag">Veteran Pride. Discipline. Strategy. Results.</div>
+    
+    <!-- ========================================
+         BUYER TERMS CARD
+         ======================================== -->
+    <div class="rules">
+      <h3>Buyer Terms</h3>
+      <ul>
+        <li>Private 48hr deals only. Seller recordings provided for full transparency.</li>
+        <li>1% VaultForge fee. Paid at close. $0 to browse deals.</li>
+        <li>You split assignment 50/50 with wholesaler on closed deals.</li>
+        <li>$2k EMD to title within 24hrs of CLAIM or deal releases.</li>
+        <li>48hr clock starts at CLAIM. No close = deal dies. No extensions.</li>
+      </ul>
+    </div>
 
-  <div class="terms-box">
-    <div class="terms-title">Buyer Terms</div>
-    <ul class="terms-list">
-      <li>Private 48hr deals - Exclusive off-market opportunities with tight execution windows</li>
-      <li>1% at close - Transparent fee structure due at closing</li>
-      <li>50/50 JV split - Joint venture partnerships on qualified deals</li>
-      <li>$2k EMD - Earnest money deposit secures position on accepted offers</li>
-      <li>48hr clock - Decision and funding timeline for all submissions</li>
-    </ul>
-  </div>
+    <!-- ========================================
+         FORM - INVESTOR APPLICATION
+         ======================================== -->
+    <form id="inviteForm" novalidate>
+      
+      <!-- PERSONAL INFO -->
+      <div class="form-section">
+        <div class="form-group">
+          <label for="name" class="required">Full Name</label>
+          <input 
+            type="text" 
+            id="name"
+            name="name" 
+            required 
+            autocomplete="name"
+            placeholder="John Smith"
+            data-gtm="name"
+            data-fb="name">
+          <div class="error-message" id="name-error">Please enter your full name</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="phone" class="required">Phone</label>
+          <input 
+            type="tel" 
+            id="phone"
+            name="phone" 
+            required 
+            autocomplete="tel"
+            placeholder="(555) 123-4567"
+            data-gtm="phone"
+            data-fb="phone">
+          <div class="error-message" id="phone-error">Please enter a valid phone number</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="email" class="required">Email</label>
+          <input 
+            type="email" 
+            id="email"
+            name="email" 
+            required 
+            autocomplete="email"
+            placeholder="john@example.com"
+            data-gtm="email"
+            data-fb="email">
+          <div class="error-message" id="email-error">Please enter a valid email address</div>
+        </div>
 
-  <div class="form-section">
-    <h2 class="form-title">Request Buyer Access</h2>
-    <form id="buyerForm">
-      <div class="form-group">
-        <label for="name">Full Name<span class="required">*</span></label>
-        <input type="text" id="name" name="name" required>
-        <div class="error-message">Please enter your full name</div>
+        <div class="form-group">
+          <label for="company">Company / LLC</label>
+          <input 
+            type="text" 
+            id="company"
+            name="company" 
+            autocomplete="organization"
+            placeholder="Smith Holdings LLC (Optional)"
+            data-gtm="company">
+        </div>
       </div>
 
+      <!-- INVESTMENT STATES -->
+      <div class="section-title">Investment States - Select All That Apply *</div>
       <div class="form-group">
-        <label for="phone">Phone Number<span class="required">*</span></label>
-        <input type="tel" id="phone" name="phone" placeholder="(555) 555-5555" required>
-        <div class="error-message">Please enter a valid phone number</div>
+        <div class="checkbox-group" id="states-group">
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="GA" data-gtm="state-ga">
+              <span>Georgia</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="TN" data-gtm="state-tn">
+              <span>Tennessee</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="AL" data-gtm="state-al">
+              <span>Alabama</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="FL" data-gtm="state-fl">
+              <span>Florida</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="NC" data-gtm="state-nc">
+              <span>North Carolina</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="SC" data-gtm="state-sc">
+              <span>South Carolina</span>
+            </label>
+          </div>
+          <div class="checkbox-item">
+            <label>
+              <input type="checkbox" name="states" value="TX" data-gtm="state-tx">
+              <span>Texas</span>
+            </label>
+          </div>
+        </div>
+        <div class="error-message" id="states-error">Please select at least one investment state</div>
       </div>
-
+      
+      <!-- DEAL SIZE -->
       <div class="form-group">
-        <label for="email">Email Address<span class="required">*</span></label>
-        <input type="email" id="email" name="email" required>
-        <div class="error-message">Please enter a valid email address</div>
-      </div>
-
-      <div class="form-group">
-        <label for="state">State<span class="required">*</span></label>
-        <select id="state" name="state" required>
-          <option value="">Select Your State</option>
-          <option value="AL">Alabama</option>
-          <option value="AK">Alaska</option>
-          <option value="AZ">Arizona</option>
-          <option value="AR">Arkansas</option>
-          <option value="CA">California</option>
-          <option value="CO">Colorado</option>
-          <option value="CT">Connecticut</option>
-          <option value="DE">Delaware</option>
-          <option value="DC">District of Columbia</option>
-          <option value="FL">Florida</option>
-          <option value="GA">Georgia</option>
-          <option value="HI">Hawaii</option>
-          <option value="ID">Idaho</option>
-          <option value="IL">Illinois</option>
-          <option value="IN">Indiana</option>
-          <option value="IA">Iowa</option>
-          <option value="KS">Kansas</option>
-          <option value="KY">Kentucky</option>
-          <option value="LA">Louisiana</option>
-          <option value="ME">Maine</option>
-          <option value="MD">Maryland</option>
-          <option value="MA">Massachusetts</option>
-          <option value="MI">Michigan</option>
-          <option value="MN">Minnesota</option>
-          <option value="MS">Mississippi</option>
-          <option value="MO">Missouri</option>
-          <option value="MT">Montana</option>
-          <option value="NE">Nebraska</option>
-          <option value="NV">Nevada</option>
-          <option value="NH">New Hampshire</option>
-          <option value="NJ">New Jersey</option>
-          <option value="NM">New Mexico</option>
-          <option value="NY">New York</option>
-          <option value="NC">North Carolina</option>
-          <option value="ND">North Dakota</option>
-          <option value="OH">Ohio</option>
-          <option value="OK">Oklahoma</option>
-          <option value="OR">Oregon</option>
-          <option value="PA">Pennsylvania</option>
-          <option value="RI">Rhode Island</option>
-          <option value="SC">South Carolina</option>
-          <option value="SD">South Dakota</option>
-          <option value="TN">Tennessee</option>
-          <option value="TX">Texas</option>
-          <option value="UT">Utah</option>
-          <option value="VT">Vermont</option>
-          <option value="VA">Virginia</option>
-          <option value="WA">Washington</option>
-          <option value="WV">West Virginia</option>
-          <option value="WI">Wisconsin</option>
-          <option value="WY">Wyoming</option>
+        <label for="deal_size" class="required">Deal Size Range</label>
+        <select 
+          id="deal_size"
+          name="deal_size" 
+          required 
+          data-gtm="deal_size"
+          data-fb="deal_size">
+          <option value="">Select Range</option>
+          <option value="$0 - $50,000">$0 - $50,000</option>
+          <option value="$50,000 - $100,000">$50,000 - $100,000</option>
+          <option value="$100,000 - $250,000">$100,000 - $250,000</option>
+          <option value="$250,000 - $500,000">$250,000 - $500,000</option>
+          <option value="$500,000 - $1,000,000">$500,000 - $1,000,000</option>
+          <option value="$1,000,000+">$1,000,000+</option>
         </select>
-        <div class="error-message">Please select your state</div>
+        <div class="error-message" id="deal_size-error">Please select a deal size range</div>
       </div>
 
+      <!-- BUY BOX -->
+      <div class="section-title">Buy Box - Select All That Apply *</div>
       <div class="form-group">
-        <label>Buy Box - Investment Preferences<span class="required">*</span></label>
-        <div class="checkbox-grid">
+        <div class="checkbox-group" id="buybox-group">
           <div class="checkbox-item">
-            <input type="checkbox" id="sf" name="buybox" value="Single Family">
-            <label for="sf">Single Family</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Single Family" data-gtm="buybox-sf">
+              <span>Single Family</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="mf24" name="buybox" value="Multi-Family 2-4">
-            <label for="mf24">Multi-Family 2-4</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Multi-Family 2-4" data-gtm="buybox-mf24">
+              <span>Multi-Family 2-4</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="mf5" name="buybox" value="Multi-Family 5+">
-            <label for="mf5">Multi-Family 5+</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Multi-Family 5+" data-gtm="buybox-mf5">
+              <span>Multi-Family 5+</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="land" name="buybox" value="Land">
-            <label for="land">Land</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Land" data-gtm="buybox-land">
+              <span>Land</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="commercial" name="buybox" value="Commercial">
-            <label for="commercial">Commercial</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Commercial" data-gtm="buybox-comm">
+              <span>Commercial</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="mobile" name="buybox" value="Mobile Home">
-            <label for="mobile">Mobile Home</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Mobile Home" data-gtm="buybox-mh">
+              <span>Mobile Home</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="condos" name="buybox" value="Condos">
-            <label for="condos">Condos</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Condos" data-gtm="buybox-condo">
+              <span>Condos</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="flip" name="buybox" value="Fix & Flip">
-            <label for="flip">Fix & Flip</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Fix & Flip" data-gtm="buybox-flip">
+              <span>Fix & Flip</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="hold" name="buybox" value="Buy & Hold">
-            <label for="hold">Buy & Hold</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Buy & Hold" data-gtm="buybox-hold">
+              <span>Buy & Hold</span>
+            </label>
           </div>
           <div class="checkbox-item">
-            <input type="checkbox" id="wholesale" name="buybox" value="Wholesale">
-            <label for="wholesale">Wholesale</label>
+            <label>
+              <input type="checkbox" name="buybox" value="Wholesale" data-gtm="buybox-ws">
+              <span>Wholesale</span>
+            </label>
           </div>
         </div>
-        <div class="error-message" id="buyboxError">Please select at least one investment type</div>
+        <div class="error-message" id="buybox-error">Please select at least one buy box option</div>
       </div>
-
+      
+      <!-- POF UPLOAD -->
       <div class="form-group">
-        <label for="pof">Proof of Funds<span class="required">*</span></label>
-        <div class="file-input-wrapper">
-          <input type="file" id="pof" name="pof" accept=".pdf,.jpg,.jpeg,.png" required>
-          <label for="pof" class="file-input-label">Click to upload PDF, JPG, or PNG</label>
+        <label for="pof" class="required">Proof of Funds - Upload Screenshot/PDF</label>
+        <div class="file-upload-wrapper">
+          <input 
+            type="file" 
+            id="pof"
+            name="pof" 
+            accept="image/*,.pdf" 
+            required 
+            data-gtm="pof"
+            data-fb="pof">
+          <div class="file-info">Max file size: 10MB. Accepted: JPG, PNG, PDF</div>
+          <div class="file-preview" id="file-preview">
+            <div class="file-preview-icon">📄</div>
+            <div class="file-preview-info">
+              <div class="file-preview-name" id="file-name"></div>
+              <div class="file-preview-size" id="file-size"></div>
+            </div>
+          </div>
         </div>
-        <div class="file-name" id="fileName"></div>
-        <div class="error-message">Proof of funds document is required</div>
+        <div class="error-message" id="pof-error">Please upload proof of funds</div>
       </div>
-
-      <button type="submit" class="submit-btn">REQUEST ACCESS</button>
-      <p class="disclaimer">By submitting, you agree to the buyer terms outlined above. All information will be kept confidential.</p>
+      
+      <!-- SUBMIT -->
+      <div class="button-wrapper">
+        <button type="submit" id="submit-btn" data-gtm="submit" data-fb="submit">
+          <span class="button-text">REQUEST ACCESS</span>
+          <div class="button-loading"></div>
+        </button>
+      </div>
     </form>
-
-    <div class="success-message" id="successMessage">
-      <h3>Access Request Received</h3>
-      <p>Thank you for your submission. Our team will review your application and contact you within 24-48 hours with next steps.</p>
+    
+    <!-- DISCLAIMER -->
+    <div class="disclaimer">
+      By submitting, you agree to VaultForge terms. 1% fee due at closing only. 
+      EMD forfeited if you fail to perform. All deals subject to verification. 
+      VaultForge is not a broker. We connect buyers with opportunities.
+    </div>
+    
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="footer-brand">Built on Honor. Driven by Purpose.</div>
+      <div style="margin-top: 8px;">© 2026 VaultForge. Veteran-Owned & Operated.</div>
     </div>
   </div>
 
-  <footer class="footer">
-    Built on Honor. Driven by Purpose.
-  </footer>
-</div>
-
+<!-- ========================================
+     JAVASCRIPT - VALIDATION & UX
+     ======================================== -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.getElementById('buyerForm');
-  const fileInput = document.getElementById('pof');
-  const fileName = document.getElementById('fileName');
-  const successMessage = document.getElementById('successMessage');
+(function() {
+  'use strict';
   
-  fileInput.addEventListener('change', function(e) {
-    if (e.target.files.length > 0) {
-      fileName.textContent = 'Selected: ' + e.target.files[0].name;
-    } else {
-      fileName.textContent = '';
-    }
-  });
-
-  // Phone formatting
-  const phoneInput = document.getElementById('phone');
-  phoneInput.addEventListener('input', function(e) {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 0) {
-      if (value.length <= 3) {
-        value = '(' + value;
-      } else if (value.length <= 6) {
-        value = '(' + value.slice(0, 3) + ') ' + value.slice(3);
-      } else {
-        value = '(' + value.slice(0, 3) + ') ' + value.slice(3, 6) + '-' + value.slice(6, 10);
-      }
-    }
-    e.target.value = value;
-  });
-
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    let isValid = true;
-    
-    // Clear previous errors
-    document.querySelectorAll('.form-group').forEach(group => {
-      group.classList.remove('error');
-    });
-    document.getElementById('buyboxError').style.display = 'none';
-    
-    // Validate required fields
-    const requiredFields = ['name', 'phone', 'email', 'state'];
-    requiredFields.forEach(field => {
-      const input = document.getElementById(field);
-      if (!input.value.trim()) {
-        input.parentElement.classList.add('error');
-        isValid = false;
-      }
-    });
-    
-    // Validate email format
-    const email = document.getElementById('email');
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (email.value && !emailRegex.test(email.value)) {
-      email.parentElement.classList.add('error');
-      isValid = false;
-    }
-    
-    // Validate phone
-    const phoneValue = document.getElementById('phone').value.replace(/\D/g, '');
-    if (phoneValue.length < 10) {
-      document.getElementById('phone').parentElement.classList.add('error');
-      isValid = false;
-    }
-    
-    // Validate buy box - at least one selected
-    const buyBoxChecked = document.querySelectorAll('input[name="buybox"]:checked');
-    if (buyBoxChecked.length === 0) {
-      document.getElementById('buyboxError').style.display = 'block';
-      isValid = false;
-    }
-    
-    // Validate POF upload
-    if (!fileInput.files.length) {
-      fileInput.parentElement.parentElement.classList.add('error');
-      isValid = false;
-    }
-    
-    if (isValid) {
-      // Simulate form submission
-      form.style.display = 'none';
-      successMessage.classList.add('show');
-      
-      // Scroll to success message
-      successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
-      // In production: Replace with actual form submission logic
-      // const formData = new FormData(form);
-      // fetch('/api/buyer-request', { method: 'POST', body: formData })
-    }
-  });
-
-  // Interactive checkbox items
-  document.querySelectorAll('.checkbox-item').forEach(item => {
-    item.addEventListener('click', function(e) {
-      if (e.target.type !== 'checkbox') {
-        const checkbox = this.querySelector('input[type="checkbox"]');
-        checkbox.checked = !checkbox.checked;
-      }
-    });
-  });
-});
-</script>
-<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
-</body>
-</html>
+  // ========================================
+  // FORM ELEMENTS
+  // ========================================
+  const form = document.getElementById('inviteForm');
+  const submitBtn
